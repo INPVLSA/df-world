@@ -51,10 +51,6 @@ python app.py
 
 Open http://localhost:5001 in your browser.
 
-## Custom Race Icons
-
-Add PNG icons to `static/icons/races/` named by race code (e.g., `DWARF.png`). Falls back to ASCII symbols.
-
 ## Support
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/inpvlsa)
@@ -63,4 +59,5 @@ Add PNG icons to `static/icons/races/` named by race code (e.g., `DWARF.png`). F
 
 [MIT](LICENSE)
 
+![importing.png](docs/importing.png)
 ![fig2.png](docs/fig2.png)
