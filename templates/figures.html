@@ -14,6 +14,7 @@
         <option value="{{ r.race }}" {% if race_filter == r.race %}selected{% endif %}>{{ r.race|race_label }}</option>
         {% endfor %}
     </select>
+    <button type="button" id="clear-filters" class="btn btn-clear"{% if not search and not race_filter %} disabled{% endif %}>Clear</button>
 </div>
 
 <p class="results-info">Showing <span id="showing-count">{{ figures|length }}</span> of <span id="total-count">{{ "{:,}".format(total) }}</span> figures</p>
@@ -53,6 +54,7 @@
 (function() {
     var searchInput = document.getElementById('search-input');
     var raceSelect = document.getElementById('race-select');
+    var clearBtn = document.getElementById('clear-filters');
     var tbody = document.getElementById('figures-tbody');
     var thead = document.querySelector('table thead');
     var showingCount = document.getElementById('showing-count');
@@ -208,6 +210,20 @@
             fetchData(1, col, newDir);
         }
     });
+
+    function updateClearButton() {
+        clearBtn.disabled = !searchInput.value && !raceSelect.value;
+    }
+
+    clearBtn.addEventListener('click', function() {
+        searchInput.value = '';
+        raceSelect.value = '';
+        updateClearButton();
+        fetchData(1, 'name', 'asc');
+    });
+
+    searchInput.addEventListener('input', updateClearButton);
+    raceSelect.addEventListener('change', updateClearButton);
 })();
 </script>
 {% endblock %}

@@ -93,9 +93,9 @@ h3 {
 
 .btn {
     font-family: 'Press Start 2P', monospace;
-    background: #333;
-    color: #0f0;
-    border: 2px solid #0f0;
+    background: #000;
+    color: #0c0;
+    border: 2px solid #0c0;
     padding: 0.5rem 1rem;
     cursor: pointer;
     font-size: 10px;
@@ -103,7 +103,7 @@ h3 {
 }
 
 .btn:hover {
-    background: #0f0;
+    background: #0c0;
     color: #000;
 }
 
@@ -115,6 +115,18 @@ h3 {
 .btn-primary:hover {
     background: #f80;
     color: #000;
+}
+
+.btn.btn-clear {
+    text-decoration: none;
+}
+
+.btn.btn-clear.disabled,
+.btn.btn-clear:disabled {
+    border-color: #333;
+    color: #333;
+    cursor: not-allowed;
+    pointer-events: none;
 }
 
 .hint {
