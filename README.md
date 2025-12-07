@@ -1,4 +1,4 @@
-![db.png](docs/db.png)
+![fig.png](docs/fig.png)
 
 A web interface for exploring your Dwarf Fortress world history.
 
@@ -70,5 +70,7 @@ Open http://localhost:5001 in your browser.
 
 [MIT](LICENSE)
 
-![importing.png](docs/importing.png)
-![fig2.png](docs/fig2.png)
+![db.png](docs/db.png)
+![fig.png](docs/fig.png)
+![sit.png](docs/sit.png)
+![art.png](docs/art.png)
