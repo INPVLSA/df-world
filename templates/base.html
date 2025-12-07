@@ -115,6 +115,94 @@
             return linkType.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
         }
 
+        function formatEntityFallback(entity) {
+            // When entity has no name, show type + race as fallback
+            var parts = [];
+            if (entity.entity_race) {
+                parts.push(titleCase(entity.entity_race.replace(/_/g, ' ')));
+            }
+            if (entity.entity_type) {
+                parts.push(titleCase(entity.entity_type.replace(/_/g, ' ')));
+            }
+            if (parts.length > 0) {
+                return parts.join(' ') + ' #' + entity.entity_id;
+            }
+            return 'Entity #' + entity.entity_id;
+        }
+
+        function formatEventDescription(ev, figId) {
+            var parts = [];
+            var extra = {};
+            if (ev.extra_data) {
+                try { extra = JSON.parse(ev.extra_data); } catch(e) {}
+            }
+
+            var type = (ev.type || '').replace(/ /g, '_');
+
+            // Site reference
+            if (ev.site_name) {
+                parts.push('at <a href="#" class="entity-link" data-type="site" data-id="' + ev.site_id + '">' + titleCase(ev.site_name) + '</a>');
+            }
+
+            // Death events
+            if (type === 'hist_figure_died') {
+                if (ev.slayer_name) {
+                    parts.unshift('killed by <a href="#" class="entity-link" data-type="figure" data-id="' + ev.slayer_hfid + '">' + titleCase(ev.slayer_name) + '</a>');
+                }
+                var cause = ev.death_cause || extra.death_cause;
+                if (cause) {
+                    parts.push('(' + cause.replace(/_/g, ' ') + ')');
+                }
+            }
+
+            // Relationship events
+            if (type === 'add_hf_hf_link' || type === 'remove_hf_hf_link') {
+                if (ev.hfid2_name) {
+                    var rel = extra.link_type ? extra.link_type.replace(/_/g, ' ') : 'relationship';
+                    var verb = type === 'add_hf_hf_link' ? 'formed' : 'ended';
+                    parts.unshift(verb + ' ' + rel + ' with <a href="#" class="entity-link" data-type="figure" data-id="' + ev.hfid2 + '">' + titleCase(ev.hfid2_name) + '</a>');
+                }
+            }
+
+            // Entity link events
+            if (type === 'add_hf_entity_link' || type === 'remove_hf_entity_link') {
+                var linkType = extra.link_type || '';
+                var entityId = ev.civ_id || ev.entity_id || extra.civ_id || extra.entity_id;
+                if (entityId) {
+                    parts.unshift('<a href="#" class="entity-link" data-type="entity" data-id="' + entityId + '">Entity #' + entityId + '</a>');
+                }
+                if (linkType) {
+                    parts.unshift(linkType.replace(/_/g, ' '));
+                }
+            }
+
+            // State change
+            if (type === 'change_hf_state') {
+                var state = ev.state || extra.state;
+                if (state) {
+                    parts.unshift('became ' + state.replace(/_/g, ' '));
+                }
+            }
+
+            // Job change
+            if (type === 'change_hf_job') {
+                var newJob = extra.new_job;
+                if (newJob) {
+                    parts.unshift('became ' + newJob.replace(/_/g, ' '));
+                }
+            }
+
+            // Artifact created
+            if (type === 'artifact_created') {
+                var artifactId = ev.artifact_id || extra.artifact_id;
+                if (artifactId) {
+                    parts.unshift('created <a href="#" class="entity-link" data-type="artifact" data-id="' + artifactId + '">artifact #' + artifactId + '</a>');
+                }
+            }
+
+            return parts.join(' ');
+        }
+
         function getTitleWithSprite(type, data) {
             var name, sprite = '';
             if (type === 'figure' && data.figure) {
@@ -186,26 +274,59 @@
 
                 // Affiliations
                 if (data.affiliations && data.affiliations.length > 0) {
-                    html += '<div class="entity-section"><div class="entity-section-title">Affiliations</div>';
-                    data.affiliations.forEach(function(aff) {
-                        var name = aff.entity_name ? titleCase(aff.entity_name) : 'Entity #' + aff.entity_id;
+                    html += '<div class="entity-section"><div class="entity-section-title">Affiliations (' + data.affiliations.length + ')</div>';
+                    html += '<div class="expandable-list" data-limit="5">';
+                    data.affiliations.forEach(function(aff, idx) {
+                        var name = aff.entity_name ? titleCase(aff.entity_name) : formatEntityFallback(aff);
                         var linkType = formatLinkType(aff.link_type);
-                        html += '<div class="entity-list-item"><span class="link-type">' + linkType + '</span>: ';
+                        var hiddenClass = idx >= 5 ? ' hidden-item' : '';
+                        html += '<div class="entity-list-item' + hiddenClass + '"><span class="link-type">' + linkType + '</span>: ';
                         html += '<a href="#" class="entity-link" data-type="entity" data-id="' + aff.entity_id + '">' + name + '</a></div>';
                     });
-                    html += '</div>';
+                    if (data.affiliations.length > 5) {
+                        html += '<div class="expand-more-btn" data-count="' + (data.affiliations.length - 5) + '">... and ' + (data.affiliations.length - 5) + ' more</div>';
+                    }
+                    html += '</div></div>';
                 }
 
                 // Site links
                 if (data.site_links && data.site_links.length > 0) {
-                    html += '<div class="entity-section"><div class="entity-section-title">Site Links</div>';
-                    data.site_links.forEach(function(sl) {
+                    html += '<div class="entity-section"><div class="entity-section-title">Site Links (' + data.site_links.length + ')</div>';
+                    html += '<div class="expandable-list" data-limit="5">';
+                    data.site_links.forEach(function(sl, idx) {
                         var name = sl.site_name ? titleCase(sl.site_name) : 'Site #' + sl.site_id;
                         var linkType = formatLinkType(sl.link_type);
-                        html += '<div class="entity-list-item"><span class="link-type">' + linkType + '</span>: ';
+                        var hiddenClass = idx >= 5 ? ' hidden-item' : '';
+                        html += '<div class="entity-list-item' + hiddenClass + '"><span class="link-type">' + linkType + '</span>: ';
                         html += '<a href="#" class="entity-link" data-type="site" data-id="' + sl.site_id + '">' + name + '</a></div>';
                     });
-                    html += '</div>';
+                    if (data.site_links.length > 5) {
+                        html += '<div class="expand-more-btn" data-count="' + (data.site_links.length - 5) + '">... and ' + (data.site_links.length - 5) + ' more</div>';
+                    }
+                    html += '</div></div>';
+                }
+
+                // Life events / history
+                if (data.events && data.events.length > 0) {
+                    html += '<div class="entity-section"><div class="entity-section-title">Life Events (' + data.events.length + (data.events.length >= 100 ? '+' : '') + ')</div>';
+                    html += '<div class="timeline">';
+                    var lastYear = null;
+                    data.events.forEach(function(ev) {
+                        var yearChanged = ev.year !== lastYear;
+                        if (yearChanged) {
+                            html += '<div class="timeline-year">' + (ev.year || '?') + '</div>';
+                            lastYear = ev.year;
+                        }
+                        html += '<div class="timeline-event">';
+                        html += '<span class="timeline-type">' + (ev.type_label || ev.type || 'Event') + '</span>';
+                        // Build description
+                        var desc = formatEventDescription(ev, fig.id);
+                        if (desc) {
+                            html += '<span class="timeline-desc">' + desc + '</span>';
+                        }
+                        html += '</div>';
+                    });
+                    html += '</div></div>';
                 }
 
                 html += '</div>';
@@ -226,13 +347,15 @@
                 // Structures
                 if (data.structures && data.structures.length > 0) {
                     html += '<div class="entity-section"><div class="entity-section-title">Structures (' + data.structures.length + ')</div>';
-                    data.structures.slice(0, 10).forEach(function(st) {
-                        html += '<div class="entity-list-item">' + (st.type_label || st.type || 'Structure') + ': ' + titleCase(st.name) + '</div>';
+                    html += '<div class="expandable-list" data-limit="10">';
+                    data.structures.forEach(function(st, idx) {
+                        var hiddenClass = idx >= 10 ? ' hidden-item' : '';
+                        html += '<div class="entity-list-item' + hiddenClass + '">' + (st.type_label || st.type || 'Structure') + ': ' + titleCase(st.name) + '</div>';
                     });
                     if (data.structures.length > 10) {
-                        html += '<div class="entity-list-item more">... and ' + (data.structures.length - 10) + ' more</div>';
+                        html += '<div class="expand-more-btn" data-count="' + (data.structures.length - 10) + '">... and ' + (data.structures.length - 10) + ' more</div>';
                     }
-                    html += '</div>';
+                    html += '</div></div>';
                 }
 
                 html += '</div>';
@@ -275,15 +398,17 @@
 
                 // Positions
                 if (data.positions && data.positions.length > 0) {
-                    html += '<div class="entity-section"><div class="entity-section-title">Positions</div>';
-                    data.positions.slice(0, 10).forEach(function(pos) {
-                        var holder = pos.holder_name ? ' - ' + titleCase(pos.holder_name) : '';
-                        html += '<div class="entity-list-item">' + titleCase(pos.name) + holder + '</div>';
+                    html += '<div class="entity-section"><div class="entity-section-title">Positions (' + data.positions.length + ')</div>';
+                    html += '<div class="expandable-list" data-limit="10">';
+                    data.positions.forEach(function(pos, idx) {
+                        var holder = pos.holder_name ? ' - <a href="#" class="entity-link" data-type="figure" data-id="' + pos.histfig_id + '">' + titleCase(pos.holder_name) + '</a>' : '';
+                        var hiddenClass = idx >= 10 ? ' hidden-item' : '';
+                        html += '<div class="entity-list-item' + hiddenClass + '">' + titleCase(pos.name) + holder + '</div>';
                     });
                     if (data.positions.length > 10) {
-                        html += '<div class="entity-list-item more">... and ' + (data.positions.length - 10) + ' more</div>';
+                        html += '<div class="expand-more-btn" data-count="' + (data.positions.length - 10) + '">... and ' + (data.positions.length - 10) + ' more</div>';
                     }
-                    html += '</div>';
+                    html += '</div></div>';
                 }
 
                 html += '</div>';
@@ -343,6 +468,18 @@
             if (link) {
                 e.preventDefault();
                 load(link.dataset.type, link.dataset.id);
+                return;
+            }
+            // Handle expand more button
+            var expandBtn = e.target.closest('.expand-more-btn');
+            if (expandBtn) {
+                var list = expandBtn.closest('.expandable-list');
+                if (list) {
+                    list.querySelectorAll('.hidden-item').forEach(function(item) {
+                        item.classList.remove('hidden-item');
+                    });
+                    expandBtn.remove();
+                }
             }
         });
 

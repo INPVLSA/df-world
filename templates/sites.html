@@ -35,10 +35,10 @@
         <tr class="site-row" data-site-id="{{ site.id }}" data-structure-count="{{ site.structure_count or 0 }}">
             <td class="expand-toggle"><span class="expand-icon{% if not has_plus %} no-plus{% elif not site.structure_count %} no-structures{% endif %}">+</span></td>
             <td>{{ site.id }}</td>
-            <td>{{ site.name|title if site.name else '(unnamed)' }}</td>
+            <td><a href="#" class="entity-link" data-type="site" data-id="{{ site.id }}">{{ site.name|title if site.name else '(unnamed)' }}</a></td>
             <td class="type-cell">{% set ti = get_site_type_info(site.type) %}{% if ti.img %}<img src="{{ ti.img }}" class="type-icon" alt="">{% else %}<span class="type-icon-text">{{ ti.icon }}</span>{% endif %} {{ ti.label }}</td>
             <td>{{ site.coords or '-' }}</td>
-            <td class="race-cell">{% if site.civ_race %}{% set ri = get_race_info(site.civ_race|upper) %}{% if ri.img %}<img src="{{ ri.img }}" class="race-icon" alt="">{% else %}<span class="race-icon-text">{{ ri.icon }}</span>{% endif %} {{ ri.label }}{% else %}-{% endif %}</td>
+            <td class="race-cell">{% if site.civ_id %}<a href="#" class="entity-link" data-type="entity" data-id="{{ site.civ_id }}">{% set ri = get_race_info(site.civ_race|upper) %}{% if ri.img %}<img src="{{ ri.img }}" class="race-icon" alt="">{% else %}<span class="race-icon-text">{{ ri.icon }}</span>{% endif %} {{ ri.label }}</a>{% else %}-{% endif %}</td>
         </tr>
         {% endfor %}
     </tbody>
@@ -205,14 +205,15 @@
             var html = '';
             data.sites.forEach(function(site) {
                 var civCell = '-';
-                if (site.civ_label) {
-                    civCell = (site.civ_img ? '<img src="' + site.civ_img + '" class="race-icon" alt="">' : '<span class="race-icon-text">' + site.civ_icon + '</span>') + ' ' + site.civ_label;
+                if (site.civ_label && site.civ_id) {
+                    civCell = '<a href="#" class="entity-link" data-type="entity" data-id="' + site.civ_id + '">' +
+                        (site.civ_img ? '<img src="' + site.civ_img + '" class="race-icon" alt="">' : '<span class="race-icon-text">' + site.civ_icon + '</span>') + ' ' + site.civ_label + '</a>';
                 }
                 var noStructures = !site.structure_count ? ' no-structures' : '';
                 html += '<tr class="site-row" data-site-id="' + site.id + '" data-structure-count="' + (site.structure_count || 0) + '">' +
                     '<td class="expand-toggle"><span class="expand-icon' + noStructures + '">+</span></td>' +
                     '<td>' + site.id + '</td>' +
-                    '<td>' + titleCase(site.name) + '</td>' +
+                    '<td><a href="#" class="entity-link" data-type="site" data-id="' + site.id + '">' + titleCase(site.name) + '</a></td>' +
                     '<td class="type-cell">' + (site.type_img ? '<img src="' + site.type_img + '" class="type-icon" alt="">' : '<span class="type-icon-text">' + site.type_icon + '</span>') + ' ' + site.type_label + '</td>' +
                     '<td>' + (site.coords || '-') + '</td>' +
                     '<td class="race-cell">' + civCell + '</td>' +

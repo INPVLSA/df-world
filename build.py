@@ -426,8 +426,12 @@ def run_import(legends_path=None, plus_path=None):
             # Entities
             print("\nImporting entities...")
             pos_count = assign_count = 0
+            debug_shown = False
             def import_entity(data):
-                nonlocal pos_count, assign_count
+                nonlocal pos_count, assign_count, debug_shown
+                if not debug_shown:
+                    print(f"  DEBUG - Sample entity keys: {list(data.keys())}")
+                    debug_shown = True
                 entity_id = data.get('id')
                 cursor.execute(
                     "INSERT OR REPLACE INTO entities (id, name, race, type) VALUES (?, ?, ?, ?)",

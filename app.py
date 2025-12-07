@@ -1529,7 +1529,7 @@ def api_figure(figure_id):
 
     # Get affiliations
     affiliations = db.execute("""
-        SELECT hel.*, e.name as entity_name, e.type as entity_type
+        SELECT hel.*, e.name as entity_name, e.type as entity_type, e.race as entity_race
         FROM hf_entity_links hel
         LEFT JOIN entities e ON hel.entity_id = e.id
         WHERE hel.hfid = ?
@@ -1545,10 +1545,44 @@ def api_figure(figure_id):
         ORDER BY hsl.link_type, s.name
     """, [figure_id]).fetchall()
 
+    # Get life events (where this figure is involved)
+    # hfid is direct column, other figure refs may be in extra_data JSON
+    events = db.execute("""
+        SELECT e.*, s.name as site_name,
+               slayer.name as slayer_name
+        FROM historical_events e
+        LEFT JOIN sites s ON e.site_id = s.id
+        LEFT JOIN historical_figures slayer ON e.slayer_hfid = slayer.id
+        WHERE e.hfid = ? OR e.slayer_hfid = ?
+           OR e.extra_data LIKE ?
+        ORDER BY e.year ASC, e.id ASC
+        LIMIT 100
+    """, [figure_id, figure_id, f'%"hfid2": {figure_id}%']).fetchall()
+
+    events_list = []
+    for ev in events:
+        ev_dict = dict(ev)
+        ev_dict['type_label'] = get_event_type_info(ev_dict.get('type'))['label']
+        # Parse extra_data to get hfid2 name if present
+        if ev_dict.get('extra_data'):
+            try:
+                import json
+                extra = json.loads(ev_dict['extra_data'])
+                hfid2 = extra.get('hfid2') or extra.get('hf_target')
+                if hfid2:
+                    hf2 = db.execute("SELECT name FROM historical_figures WHERE id = ?", [hfid2]).fetchone()
+                    if hf2:
+                        ev_dict['hfid2'] = hfid2
+                        ev_dict['hfid2_name'] = hf2['name']
+            except:
+                pass
+        events_list.append(ev_dict)
+
     return jsonify({
         'figure': fig,
         'affiliations': [dict(a) for a in affiliations],
-        'site_links': [dict(s) for s in site_links]
+        'site_links': [dict(s) for s in site_links],
+        'events': events_list
     })
 
 
