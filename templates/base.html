@@ -82,6 +82,283 @@
         {% block content %}{% endblock %}
     </main>
 
+    <!-- Entity Modal -->
+    <div id="entity-modal" class="modal-overlay" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title"></span>
+                <button class="modal-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-loading">Loading...</div>
+                <div class="modal-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Global Entity Modal System
+    window.EntityModal = (function() {
+        var modal = document.getElementById('entity-modal');
+        var modalTitle = modal.querySelector('.modal-title');
+        var modalContent = modal.querySelector('.modal-content');
+        var modalLoading = modal.querySelector('.modal-loading');
+        var closeBtn = modal.querySelector('.modal-close');
+
+        function titleCase(str) {
+            if (!str) return '-';
+            return str.replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        }
+
+        function formatLinkType(linkType) {
+            if (!linkType) return '';
+            return linkType.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        }
+
+        function getTitleWithSprite(type, data) {
+            var name, sprite = '';
+            if (type === 'figure' && data.figure) {
+                name = data.figure.name;
+                var race = data.figure.race;
+                if (race) {
+                    var imgPath = '/static/icons/races/' + race + '.png';
+                    sprite = '<img src="' + imgPath + '" class="modal-title-icon" alt="" onerror="this.style.display=\'none\'">';
+                }
+            } else if (type === 'site' && data.site) {
+                name = data.site.name;
+                var siteType = data.site.type;
+                if (siteType) {
+                    var imgPath = '/static/icons/sites/' + siteType.replace(/ /g, '_') + '.png';
+                    sprite = '<img src="' + imgPath + '" class="modal-title-icon" alt="" onerror="this.style.display=\'none\'">';
+                }
+            } else if (type === 'artifact' && data.artifact) {
+                name = data.artifact.name;
+                sprite = '<img src="/static/icons/artifact.png" class="modal-title-icon" alt="" onerror="this.style.display=\'none\'">';
+            } else if (type === 'entity' && data.entity) {
+                name = data.entity.name;
+                var race = data.entity.race;
+                if (race) {
+                    var imgPath = '/static/icons/races/' + race.toUpperCase() + '.png';
+                    sprite = '<img src="' + imgPath + '" class="modal-title-icon" alt="" onerror="this.style.display=\'none\'">';
+                }
+            }
+            if (name) {
+                return sprite + titleCase(name);
+            }
+            return null;
+        }
+
+        function show(title) {
+            modalTitle.textContent = title;
+            modalContent.innerHTML = '';
+            modalLoading.style.display = 'block';
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function hide() {
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+
+        function setContent(html) {
+            modalLoading.style.display = 'none';
+            modalContent.innerHTML = html;
+        }
+
+        function setError(msg) {
+            modalLoading.style.display = 'none';
+            modalContent.innerHTML = '<div class="modal-error">' + msg + '</div>';
+        }
+
+        // Renderers for each entity type
+        var renderers = {
+            figure: function(data) {
+                var fig = data.figure;
+                var html = '<div class="entity-details">';
+                html += '<div class="entity-row"><span class="entity-label">Race:</span> ' + (fig.race_label || '-') + '</div>';
+                html += '<div class="entity-row"><span class="entity-label">Caste:</span> ' + (fig.caste || '-') + '</div>';
+                html += '<div class="entity-row"><span class="entity-label">Born:</span> ' + (fig.birth_year != null ? fig.birth_year : '-') + '</div>';
+                html += '<div class="entity-row"><span class="entity-label">Died:</span> ' + (fig.death_year == -1 ? '<span class="alive">Alive</span>' : (fig.death_year || '-')) + '</div>';
+                if (fig.birth_year != null && fig.age != null) {
+                    html += '<div class="entity-row"><span class="entity-label">Age:</span> ' + fig.age + '</div>';
+                }
+
+                // Affiliations
+                if (data.affiliations && data.affiliations.length > 0) {
+                    html += '<div class="entity-section"><div class="entity-section-title">Affiliations</div>';
+                    data.affiliations.forEach(function(aff) {
+                        var name = aff.entity_name ? titleCase(aff.entity_name) : 'Entity #' + aff.entity_id;
+                        var linkType = formatLinkType(aff.link_type);
+                        html += '<div class="entity-list-item"><span class="link-type">' + linkType + '</span>: ';
+                        html += '<a href="#" class="entity-link" data-type="entity" data-id="' + aff.entity_id + '">' + name + '</a></div>';
+                    });
+                    html += '</div>';
+                }
+
+                // Site links
+                if (data.site_links && data.site_links.length > 0) {
+                    html += '<div class="entity-section"><div class="entity-section-title">Site Links</div>';
+                    data.site_links.forEach(function(sl) {
+                        var name = sl.site_name ? titleCase(sl.site_name) : 'Site #' + sl.site_id;
+                        var linkType = formatLinkType(sl.link_type);
+                        html += '<div class="entity-list-item"><span class="link-type">' + linkType + '</span>: ';
+                        html += '<a href="#" class="entity-link" data-type="site" data-id="' + sl.site_id + '">' + name + '</a></div>';
+                    });
+                    html += '</div>';
+                }
+
+                html += '</div>';
+                html += '<div class="modal-footer"><a href="/figures?q=' + encodeURIComponent(fig.name || '') + '" class="btn btn-sm">View in List</a></div>';
+                return html;
+            },
+
+            site: function(data) {
+                var site = data.site;
+                var html = '<div class="entity-details">';
+                html += '<div class="entity-row"><span class="entity-label">Type:</span> ' + (site.type_label || site.type || '-') + '</div>';
+                html += '<div class="entity-row"><span class="entity-label">Coords:</span> ' + (site.coords || '-') + '</div>';
+                if (site.civ_name) {
+                    html += '<div class="entity-row"><span class="entity-label">Civilization:</span> ';
+                    html += '<a href="#" class="entity-link" data-type="entity" data-id="' + site.civ_id + '">' + titleCase(site.civ_name) + '</a></div>';
+                }
+
+                // Structures
+                if (data.structures && data.structures.length > 0) {
+                    html += '<div class="entity-section"><div class="entity-section-title">Structures (' + data.structures.length + ')</div>';
+                    data.structures.slice(0, 10).forEach(function(st) {
+                        html += '<div class="entity-list-item">' + (st.type_label || st.type || 'Structure') + ': ' + titleCase(st.name) + '</div>';
+                    });
+                    if (data.structures.length > 10) {
+                        html += '<div class="entity-list-item more">... and ' + (data.structures.length - 10) + ' more</div>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '</div>';
+                html += '<div class="modal-footer"><a href="/sites?q=' + encodeURIComponent(site.name || '') + '" class="btn btn-sm">View in List</a></div>';
+                return html;
+            },
+
+            artifact: function(data) {
+                var art = data.artifact;
+                var html = '<div class="entity-details">';
+                html += '<div class="entity-row"><span class="entity-label">Type:</span> ' + (art.item_type ? art.item_type.replace(/_/g, ' ') : '-') + '</div>';
+                if (art.item_subtype) {
+                    html += '<div class="entity-row"><span class="entity-label">Subtype:</span> ' + art.item_subtype.replace(/_/g, ' ') + '</div>';
+                }
+                html += '<div class="entity-row"><span class="entity-label">Material:</span> ' + (art.mat ? art.mat.replace(/_/g, ' ') : '-') + '</div>';
+
+                if (art.creator_name) {
+                    html += '<div class="entity-row"><span class="entity-label">Creator:</span> ';
+                    html += '<a href="#" class="entity-link" data-type="figure" data-id="' + art.creator_hfid + '">' + titleCase(art.creator_name) + '</a></div>';
+                }
+                if (art.site_name) {
+                    html += '<div class="entity-row"><span class="entity-label">Created at:</span> ';
+                    html += '<a href="#" class="entity-link" data-type="site" data-id="' + art.site_id + '">' + titleCase(art.site_name) + '</a></div>';
+                }
+                if (art.holder_name) {
+                    html += '<div class="entity-row"><span class="entity-label">Held by:</span> ';
+                    html += '<a href="#" class="entity-link" data-type="figure" data-id="' + art.holder_hfid + '">' + titleCase(art.holder_name) + '</a></div>';
+                }
+
+                html += '</div>';
+                html += '<div class="modal-footer"><a href="/artifacts?q=' + encodeURIComponent(art.name || '') + '" class="btn btn-sm">View in List</a></div>';
+                return html;
+            },
+
+            entity: function(data) {
+                var ent = data.entity;
+                var html = '<div class="entity-details">';
+                html += '<div class="entity-row"><span class="entity-label">Type:</span> ' + (ent.type || '-') + '</div>';
+                html += '<div class="entity-row"><span class="entity-label">Race:</span> ' + (ent.race_label || ent.race || '-') + '</div>';
+
+                // Positions
+                if (data.positions && data.positions.length > 0) {
+                    html += '<div class="entity-section"><div class="entity-section-title">Positions</div>';
+                    data.positions.slice(0, 10).forEach(function(pos) {
+                        var holder = pos.holder_name ? ' - ' + titleCase(pos.holder_name) : '';
+                        html += '<div class="entity-list-item">' + titleCase(pos.name) + holder + '</div>';
+                    });
+                    if (data.positions.length > 10) {
+                        html += '<div class="entity-list-item more">... and ' + (data.positions.length - 10) + ' more</div>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '</div>';
+                return html;
+            }
+        };
+
+        function load(type, id) {
+            var endpoints = {
+                figure: '/api/figure/',
+                site: '/api/site/',
+                artifact: '/api/artifact/',
+                entity: '/api/entity/'
+            };
+
+            var endpoint = endpoints[type];
+            if (!endpoint) {
+                setError('Unknown entity type');
+                return;
+            }
+
+            show('Loading...');
+
+            fetch(endpoint + id)
+                .then(function(r) {
+                    if (!r.ok) throw new Error('Not found');
+                    return r.json();
+                })
+                .then(function(data) {
+                    var name = data[type] ? (data[type].name || 'ID: ' + id) : 'ID: ' + id;
+                    var titleHtml = getTitleWithSprite(type, data);
+                    modalTitle.innerHTML = titleHtml || titleCase(name);
+                    var renderer = renderers[type];
+                    if (renderer) {
+                        setContent(renderer(data));
+                    } else {
+                        setContent('<pre>' + JSON.stringify(data, null, 2) + '</pre>');
+                    }
+                })
+                .catch(function(err) {
+                    setError('Could not load ' + type + ' #' + id);
+                });
+        }
+
+        // Event listeners
+        closeBtn.addEventListener('click', hide);
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) hide();
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && modal.style.display !== 'none') hide();
+        });
+
+        // Delegate clicks on entity links within modal
+        modalContent.addEventListener('click', function(e) {
+            var link = e.target.closest('.entity-link');
+            if (link) {
+                e.preventDefault();
+                load(link.dataset.type, link.dataset.id);
+            }
+        });
+
+        // Global click handler for entity links anywhere on page
+        document.addEventListener('click', function(e) {
+            var link = e.target.closest('.entity-link');
+            if (link && !modalContent.contains(link)) {
+                e.preventDefault();
+                load(link.dataset.type, link.dataset.id);
+            }
+        });
+
+        return { show: show, hide: hide, load: load, setContent: setContent };
+    })();
+    </script>
+
     <footer class="footer">
         <div class="footer-content">
             <div class="footer-brand">

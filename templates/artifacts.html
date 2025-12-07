@@ -58,12 +58,24 @@
             <td class="artifact-name">{{ artifact.name|title if artifact.name else '-' }}</td>
             <td>{{ artifact.item_type|replace('_', ' ')|title if artifact.item_type else '-' }}</td>
             <td>{{ artifact.mat|replace('_', ' ')|title if artifact.mat else '-' }}</td>
-            <td>{{ artifact.creator_name|title if artifact.creator_name else '-' }}</td>
+            <td>
+                {% if artifact.creator_name %}
+                    {% set ri = get_race_info(artifact.creator_race) %}
+                    {% if ri.img %}<img src="{{ ri.img }}" class="race-icon" alt="">{% else %}<span class="race-icon-text">{{ ri.icon }}</span>{% endif %}
+                    <a href="#" class="entity-link" data-type="figure" data-id="{{ artifact.creator_hfid }}">{{ artifact.creator_name|title }}</a>
+                {% else %}
+                    -
+                {% endif %}
+            </td>
             <td>
                 {% if artifact.holder_name %}
-                    <span class="holder">{{ artifact.holder_name|title }}</span>
+                    {% set ri = get_race_info(artifact.holder_race) %}
+                    {% if ri.img %}<img src="{{ ri.img }}" class="race-icon" alt="">{% else %}<span class="race-icon-text">{{ ri.icon }}</span>{% endif %}
+                    <a href="#" class="entity-link holder" data-type="figure" data-id="{{ artifact.holder_hfid }}">{{ artifact.holder_name|title }}</a>
                 {% elif artifact.site_name %}
-                    <span class="site">{{ artifact.site_name|title }}</span>
+                    {% set si = get_site_type_info(artifact.site_type) %}
+                    {% if si.img %}<img src="{{ si.img }}" class="site-icon" alt="">{% else %}<span class="site-icon-text">{{ si.icon }}</span>{% endif %}
+                    <a href="#" class="entity-link site" data-type="site" data-id="{{ artifact.site_id }}">{{ artifact.site_name|title }}</a>
                 {% else %}
                     -
                 {% endif %}

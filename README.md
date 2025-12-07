@@ -4,10 +4,12 @@ A web interface for exploring your Dwarf Fortress world history.
 
 ## Features
 
-- **Historical Figures** — Browse all characters from your world, filter by race, search by name
-- **Sites** — Explore fortresses, towns, caves, and other locations
+- **Historical Figures** — Browse all characters, filter by race, search by name, view affiliations and site links
+- **Sites** — Explore fortresses, towns, caves, and other locations with their structures
+- **Artifacts** — Discover named items with their creators, materials, and current holders
 - **Events** — View the history of your world year by year
-- **Dashboard** — See world statistics at a glance
+- **Interactive References** — Click on any figure, site, artifact, or entity name to open a detailed popup with nested navigation
+- **Dashboard** — See world statistics at a glance, manage multiple worlds
 
 ## Getting Started
 
@@ -23,7 +25,7 @@ This creates `*-legends.xml` and `*-legends_plus.xml` with full data.
 **Option B: Vanilla DF**
 In Legends mode, export your world data to get `*-legends.xml`.
 
-Note: Without DFHack, some features are limited (no structures, entities, relationships, or written content).
+Note: Without DFHack, some features are limited (no structures, entities, relationships, artifact details, or written content).
 
 #### How to Access Legends Mode
 
@@ -48,19 +50,19 @@ pip install -r requirements.txt
 
 ### 3. Import Your World
 
-Copy both XML files to the `df-world` folder, then:
-
-```bash
-python build.py
-```
-
-### 4. Start Exploring
+Start the server and use the web interface to upload your XML files:
 
 ```bash
 python app.py
 ```
 
-Open http://localhost:5001 in your browser.
+Open http://localhost:5001 and drag & drop your XML files to import.
+
+You can also import via command line:
+
+```bash
+python build.py legends.xml [legends_plus.xml]
+```
 
 ## Support
 

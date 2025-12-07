@@ -1505,3 +1505,155 @@ a:hover {
     font-size: 11px;
     margin-left: auto;
 }
+
+/* ===========================================
+   Entity Modal
+   =========================================== */
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+}
+
+.modal {
+    background: #111;
+    border: 2px solid #333;
+    max-width: 500px;
+    width: 100%;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #333;
+    background: #0a0a0a;
+}
+
+.modal-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px;
+    color: #0f0;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 0.5rem;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: #f00;
+}
+
+.modal-body {
+    padding: 1rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.modal-loading {
+    color: #666;
+    text-align: center;
+    padding: 2rem;
+}
+
+.modal-error {
+    color: #f66;
+    text-align: center;
+    padding: 1rem;
+}
+
+.modal-footer {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #222;
+    text-align: center;
+}
+
+/* Entity Details */
+.entity-details {
+    font-size: 13px;
+}
+
+.entity-row {
+    margin-bottom: 0.5rem;
+}
+
+.entity-label {
+    color: #666;
+    display: inline-block;
+    min-width: 80px;
+}
+
+.entity-section {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #222;
+}
+
+.entity-section-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    color: #888;
+    margin-bottom: 0.5rem;
+}
+
+.entity-list-item {
+    padding: 0.25rem 0;
+    font-size: 12px;
+}
+
+.entity-list-item .link-type {
+    color: #666;
+}
+
+.entity-list-item.more {
+    color: #555;
+    font-style: italic;
+}
+
+/* Entity Links (clickable references) */
+.entity-link {
+    color: #0ff;
+    text-decoration: none;
+    cursor: pointer;
+    border-bottom: 1px dotted #066;
+}
+
+.entity-link:hover {
+    color: #0f0;
+    border-bottom-color: #060;
+}
+
+/* Small button variant */
+.btn-sm {
+    font-size: 11px;
+    padding: 0.4rem 0.8rem;
+}
+
+/* Modal title icon */
+.modal-title-icon {
+    height: 16px;
+    width: auto;
+    margin-right: 6px;
+    vertical-align: middle;
+    image-rendering: pixelated;
+}

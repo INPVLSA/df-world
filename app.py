@@ -1440,8 +1440,11 @@ def artifacts():
 
     query = """SELECT a.*,
                hf.name as creator_name,
+               hf.race as creator_race,
                s.name as site_name,
-               holder.name as holder_name
+               s.type as site_type,
+               holder.name as holder_name,
+               holder.race as holder_race
                FROM artifacts a
                LEFT JOIN historical_figures hf ON a.creator_hfid = hf.id
                LEFT JOIN sites s ON a.site_id = s.id
@@ -1494,6 +1497,160 @@ def artifacts():
                          sort=sort_col,
                          dir=sort_dir,
                          has_plus=has_plus)
+
+
+# ==================== API Endpoints for Modal ====================
+
+@app.route('/api/figure/<int:figure_id>')
+def api_figure(figure_id):
+    """Get figure details for modal."""
+    db = get_db()
+    if not db:
+        return jsonify({'error': 'Database not found'}), 404
+
+    figure = db.execute("""
+        SELECT * FROM historical_figures WHERE id = ?
+    """, [figure_id]).fetchone()
+
+    if not figure:
+        return jsonify({'error': 'Figure not found'}), 404
+
+    fig = dict(figure)
+    race_info = get_race_info(fig.get('race'))
+    fig['race_label'] = race_info['label']
+
+    # Calculate age
+    current_year = get_current_year()
+    if fig.get('birth_year') is not None and current_year is not None:
+        if fig.get('death_year') == -1:
+            fig['age'] = current_year - fig['birth_year']
+        elif fig.get('death_year') is not None:
+            fig['age'] = fig['death_year'] - fig['birth_year']
+
+    # Get affiliations
+    affiliations = db.execute("""
+        SELECT hel.*, e.name as entity_name, e.type as entity_type
+        FROM hf_entity_links hel
+        LEFT JOIN entities e ON hel.entity_id = e.id
+        WHERE hel.hfid = ?
+        ORDER BY hel.link_type, e.name
+    """, [figure_id]).fetchall()
+
+    # Get site links
+    site_links = db.execute("""
+        SELECT hsl.*, s.name as site_name, s.type as site_type
+        FROM hf_site_links hsl
+        LEFT JOIN sites s ON hsl.site_id = s.id
+        WHERE hsl.hfid = ?
+        ORDER BY hsl.link_type, s.name
+    """, [figure_id]).fetchall()
+
+    return jsonify({
+        'figure': fig,
+        'affiliations': [dict(a) for a in affiliations],
+        'site_links': [dict(s) for s in site_links]
+    })
+
+
+@app.route('/api/site/<int:site_id>')
+def api_site(site_id):
+    """Get site details for modal."""
+    db = get_db()
+    if not db:
+        return jsonify({'error': 'Database not found'}), 404
+
+    site = db.execute("""
+        SELECT s.*, e.name as civ_name, e.race as civ_race
+        FROM sites s
+        LEFT JOIN entities e ON s.civ_id = e.id
+        WHERE s.id = ?
+    """, [site_id]).fetchone()
+
+    if not site:
+        return jsonify({'error': 'Site not found'}), 404
+
+    site_dict = dict(site)
+    type_info = get_site_type_info(site_dict.get('type'))
+    site_dict['type_label'] = type_info['label']
+
+    # Get structures
+    structures = db.execute("""
+        SELECT * FROM structures WHERE site_id = ? ORDER BY type, name
+    """, [site_id]).fetchall()
+
+    structures_list = []
+    for s in structures:
+        st = dict(s)
+        st_info = get_structure_type_info(st.get('type'))
+        st['type_label'] = st_info['label']
+        structures_list.append(st)
+
+    return jsonify({
+        'site': site_dict,
+        'structures': structures_list
+    })
+
+
+@app.route('/api/artifact/<int:artifact_id>')
+def api_artifact(artifact_id):
+    """Get artifact details for modal."""
+    db = get_db()
+    if not db:
+        return jsonify({'error': 'Database not found'}), 404
+
+    artifact = db.execute("""
+        SELECT a.*,
+               hf.name as creator_name,
+               s.name as site_name,
+               holder.name as holder_name
+        FROM artifacts a
+        LEFT JOIN historical_figures hf ON a.creator_hfid = hf.id
+        LEFT JOIN sites s ON a.site_id = s.id
+        LEFT JOIN historical_figures holder ON a.holder_hfid = holder.id
+        WHERE a.id = ?
+    """, [artifact_id]).fetchone()
+
+    if not artifact:
+        return jsonify({'error': 'Artifact not found'}), 404
+
+    return jsonify({
+        'artifact': dict(artifact)
+    })
+
+
+@app.route('/api/entity/<int:entity_id>')
+def api_entity(entity_id):
+    """Get entity details for modal."""
+    db = get_db()
+    if not db:
+        return jsonify({'error': 'Database not found'}), 404
+
+    entity = db.execute("""
+        SELECT * FROM entities WHERE id = ?
+    """, [entity_id]).fetchone()
+
+    if not entity:
+        return jsonify({'error': 'Entity not found'}), 404
+
+    ent = dict(entity)
+    if ent.get('race'):
+        race_info = get_race_info(ent['race'].upper())
+        ent['race_label'] = race_info['label']
+
+    # Get positions with current holders
+    positions = db.execute("""
+        SELECT ep.*, hf.name as holder_name
+        FROM entity_positions ep
+        LEFT JOIN entity_position_assignments epa ON ep.entity_id = epa.entity_id AND ep.position_id = epa.position_id
+        LEFT JOIN historical_figures hf ON epa.histfig_id = hf.id
+        WHERE ep.entity_id = ?
+        ORDER BY ep.name
+    """, [entity_id]).fetchall()
+
+    return jsonify({
+        'entity': ent,
+        'positions': [dict(p) for p in positions]
+    })
 
 
 if __name__ == '__main__':
