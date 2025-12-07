@@ -1,4 +1,4 @@
-# DF-World
+![db.png](docs/db.png)
 
 A web interface for exploring your Dwarf Fortress world history.
 
@@ -52,3 +52,5 @@ Add PNG icons to `static/icons/races/` named by race code (e.g., `DWARF.png`). F
 ## License
 
 [MIT](LICENSE)
+
+![fig2.png](docs/fig2.png)
