@@ -583,6 +583,53 @@ def run_import(legends_path=None, plus_path=None):
         conn.commit()
         print(f"  Imported {count} historical events.")
 
+        # Update artifacts from legends_plus (has more detail)
+        if has_plus:
+            print("\nUpdating artifacts from legends_plus...")
+            def update_artifact_plus(data):
+                cursor.execute(
+                    """UPDATE artifacts SET
+                       item_type = COALESCE(?, item_type),
+                       item_subtype = COALESCE(?, item_subtype),
+                       mat = COALESCE(?, mat)
+                       WHERE id = ?""",
+                    (data.get('item_type'), data.get('item_subtype'), data.get('mat'),
+                     data.get('id'))
+                )
+            count = stream_elements(legends_plus_clean, 'artifact', update_artifact_plus)
+            conn.commit()
+            print(f"  Updated {count} artifacts.")
+
+        # Populate artifact creator/site from artifact_created events
+        print("\nPopulating artifact creators from events...")
+        cursor.execute("""
+            UPDATE artifacts SET
+                creator_hfid = (
+                    SELECT CASE
+                        WHEN json_extract(e.extra_data, '$.creator_hfid') IS NOT NULL
+                             AND json_extract(e.extra_data, '$.creator_hfid') != '-1'
+                        THEN json_extract(e.extra_data, '$.creator_hfid')
+                        ELSE e.hfid
+                    END
+                    FROM historical_events e
+                    WHERE e.type = 'artifact_created' AND e.artifact_id = artifacts.id
+                    LIMIT 1
+                ),
+                site_id = (
+                    SELECT e.site_id
+                    FROM historical_events e
+                    WHERE e.type = 'artifact_created' AND e.artifact_id = artifacts.id
+                    AND e.site_id IS NOT NULL AND e.site_id != -1
+                    LIMIT 1
+                )
+            WHERE EXISTS (
+                SELECT 1 FROM historical_events e
+                WHERE e.type = 'artifact_created' AND e.artifact_id = artifacts.id
+            )
+        """)
+        conn.commit()
+        print(f"  Updated {cursor.rowcount} artifacts with creator/site info.")
+
         # Written content (legends_plus only)
         if has_plus:
             print("\nImporting written content...")
@@ -675,7 +722,7 @@ def run_merge_plus(world_id, db_path, plus_path):
 
         # Update world name and altname from plus data
         if name:
-            cursor.execute("UPDATE world SET name = ? WHERE name IS NULL OR name = ''", (name,))
+            cursor.execute("UPDATE world SET name = ? WHERE name IS NULL OR name = '' OR name = 'Unknown World'", (name,))
         if altname:
             cursor.execute("UPDATE world SET altname = ? WHERE altname IS NULL", (altname,))
         conn.commit()
@@ -816,7 +863,12 @@ def run_merge_plus(world_id, db_path, plus_path):
 
         # Artifacts
         print("\nUpdating artifacts...")
+        debug_shown = False
         def import_artifact_plus(data):
+            nonlocal debug_shown
+            if not debug_shown:
+                print(f"  DEBUG - Sample artifact keys: {list(data.keys())}")
+                debug_shown = True
             cursor.execute(
                 """UPDATE artifacts SET
                    item_type = COALESCE(?, item_type),
@@ -892,7 +944,7 @@ def run_merge_plus(world_id, db_path, plus_path):
         if name or altname:
             master_conn = init_master_db()
             if name:
-                master_conn.execute("UPDATE worlds SET name = ? WHERE id = ? AND (name IS NULL OR name = '')", (name, world_id))
+                master_conn.execute("UPDATE worlds SET name = ? WHERE id = ? AND (name IS NULL OR name = '' OR name = 'Unknown World')", (name, world_id))
             if altname:
                 master_conn.execute("UPDATE worlds SET altname = ? WHERE id = ?", (altname, world_id))
             master_conn.commit()

@@ -745,10 +745,21 @@ def delete_world(world_id):
         flash('World not found', 'error')
         return redirect(url_for('index'))
 
-    # Delete database file
+    # Delete database file and WAL journal files
     db_path = Path(world['db_path'])
     if db_path.exists():
         db_path.unlink()
+    # Clean up WAL journal files
+    wal_path = db_path.with_suffix('.db-wal')
+    shm_path = db_path.with_suffix('.db-shm')
+    if wal_path.exists():
+        wal_path.unlink()
+    if shm_path.exists():
+        shm_path.unlink()
+    # Clean up map file if exists
+    map_path = db_path.with_name(f'{world_id}_map.png')
+    if map_path.exists():
+        map_path.unlink()
 
     # Remove from master database
     cursor.execute("DELETE FROM worlds WHERE id = ?", (world_id,))
