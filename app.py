@@ -975,6 +975,7 @@ def figures():
 
     search = request.args.get('q', '')
     race_filter = request.args.get('race', '')
+    alive_filter = request.args.get('alive', '') == '1'
 
     # Sorting
     sort_col = request.args.get('sort', 'name')
@@ -1006,6 +1007,10 @@ def figures():
         count_query += " AND race = ?"
         params.append(race_filter)
         count_params.append(race_filter)
+
+    if alive_filter:
+        query += " AND death_year = -1"
+        count_query += " AND death_year = -1"
 
     # Handle NULL sorting (NULLs last for ASC, first for DESC)
     if sort_dir == 'asc':
@@ -1068,6 +1073,7 @@ def figures():
                          per_page=per_page,
                          search=search,
                          race_filter=race_filter,
+                         alive_filter=alive_filter,
                          races=races,
                          current_year=current_year,
                          sort=sort_col,

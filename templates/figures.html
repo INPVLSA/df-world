@@ -14,7 +14,11 @@
         <option value="{{ r.race }}" {% if race_filter == r.race %}selected{% endif %}>{{ r.race|race_label }}</option>
         {% endfor %}
     </select>
-    <button type="button" id="clear-filters" class="btn btn-clear"{% if not search and not race_filter %} disabled{% endif %}>Clear</button>
+    <label class="checkbox-label">
+        <input type="checkbox" id="alive-checkbox"{% if alive_filter %} checked{% endif %}>
+        Alive only
+    </label>
+    <button type="button" id="clear-filters" class="btn btn-clear"{% if not search and not race_filter and not alive_filter %} disabled{% endif %}>Clear</button>
 </div>
 
 <p class="results-info">Showing <span id="showing-count">{{ figures|length }}</span> of <span id="total-count">{{ "{:,}".format(total) }}</span> figures</p>
@@ -49,13 +53,14 @@
 </table>
 
 <div class="pagination" id="pagination">
-    {{ pagination(page, total_pages, '?q=' ~ search ~ '&race=' ~ race_filter ~ '&sort=' ~ sort ~ '&dir=' ~ dir) }}
+    {{ pagination(page, total_pages, '?q=' ~ search ~ '&race=' ~ race_filter ~ '&alive=' ~ ('1' if alive_filter else '') ~ '&sort=' ~ sort ~ '&dir=' ~ dir) }}
 </div>
 
 <script>
 (function() {
     var searchInput = document.getElementById('search-input');
     var raceSelect = document.getElementById('race-select');
+    var aliveCheckbox = document.getElementById('alive-checkbox');
     var clearBtn = document.getElementById('clear-filters');
     var tbody = document.getElementById('figures-tbody');
     var thead = document.querySelector('table thead');
@@ -250,6 +255,7 @@
         params.set('page', page);
         if (searchInput.value) params.set('q', searchInput.value);
         if (raceSelect.value) params.set('race', raceSelect.value);
+        if (aliveCheckbox.checked) params.set('alive', '1');
         params.set('sort', sort);
         params.set('dir', dir);
 
@@ -306,6 +312,10 @@
         fetchData(1, currentSort, currentDir);
     });
 
+    aliveCheckbox.addEventListener('change', function() {
+        fetchData(1, currentSort, currentDir);
+    });
+
     paginationContainer.addEventListener('click', function(e) {
         var target = e.target.closest('[data-page]');
         if (target) {
@@ -328,18 +338,20 @@
     });
 
     function updateClearButton() {
-        clearBtn.disabled = !searchInput.value && !raceSelect.value;
+        clearBtn.disabled = !searchInput.value && !raceSelect.value && !aliveCheckbox.checked;
     }
 
     clearBtn.addEventListener('click', function() {
         searchInput.value = '';
         raceSelect.value = '';
+        aliveCheckbox.checked = false;
         updateClearButton();
         fetchData(1, 'name', 'asc');
     });
 
     searchInput.addEventListener('input', updateClearButton);
     raceSelect.addEventListener('change', updateClearButton);
+    aliveCheckbox.addEventListener('change', updateClearButton);
 
     tbody.addEventListener('click', function(e) {
         var toggle = e.target.closest('.expand-toggle');
