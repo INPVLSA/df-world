@@ -40,8 +40,7 @@
             <th>ID</th>
             <th>Year</th>
             <th>Type</th>
-            <th>Site ID</th>
-            <th>HF ID</th>
+            <th>Details</th>
         </tr>
     </thead>
     <tbody>
@@ -50,8 +49,7 @@
             <td>{{ event.id }}</td>
             <td>{{ event.year if event.year else '-' }}</td>
             <td class="type-cell">{% set ei = get_event_type_info(event.type) %}<span class="type-icon-text">{{ ei.icon }}</span> {{ ei.label }}</td>
-            <td>{{ event.site_id if event.site_id else '-' }}</td>
-            <td>{{ event.hfid if event.hfid else '-' }}</td>
+            <td class="event-details">{{ format_event_details(event) }}</td>
         </tr>
         {% endfor %}
     </tbody>

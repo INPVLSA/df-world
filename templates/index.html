@@ -54,6 +54,21 @@
         </form>
     </div>
     {% endif %}
+
+    {% if current_world %}
+    <div class="merge-section nav-hidden">
+        <p class="hint">Upload world map image for the Map view:</p>
+        <form method="post" action="{{ url_for('upload_map', world_id=current_world.id) }}" enctype="multipart/form-data" id="map-upload-form">
+            <div class="merge-area">
+                <label class="upload-label merge-label">
+                    <span class="upload-name" id="world-map-name">{% if current_world.has_map %}Map uploaded (click to replace){% else %}Select world_map.bmp{% endif %}</span>
+                    <input type="file" name="world_map" accept=".bmp,.png" id="world-map-input">
+                </label>
+                <button type="submit" class="btn" id="map-upload-btn" disabled>Upload Map</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
 </div>
 {% else %}
 <div class="world-info empty">
@@ -109,6 +124,25 @@ function deleteWorld(worldId, worldName) {
             mergeBtn.classList.add('loading');
         });
     }
+
+    // Map upload form handling
+    var mapUploadInput = document.getElementById('world-map-input');
+    var mapUploadName = document.getElementById('world-map-name');
+    var mapUploadBtn = document.getElementById('map-upload-btn');
+
+    if (mapUploadInput && mapUploadName && mapUploadBtn) {
+        mapUploadInput.addEventListener('change', function() {
+            if (mapUploadInput.files.length > 0) {
+                mapUploadName.textContent = mapUploadInput.files[0].name;
+                mapUploadName.classList.add('selected');
+                mapUploadBtn.disabled = false;
+            } else {
+                mapUploadName.textContent = 'Select world_map.bmp';
+                mapUploadName.classList.remove('selected');
+                mapUploadBtn.disabled = true;
+            }
+        });
+    }
 })();
 </script>
 
@@ -126,6 +160,10 @@ function deleteWorld(worldId, worldName) {
                 <label class="upload-label">
                     <span class="upload-name" id="plus-name">legends_plus.xml (optional, DFHack)</span>
                     <input type="file" name="legends_plus" accept=".xml" id="plus-input">
+                </label>
+                <label class="upload-label nav-hidden">
+                    <span class="upload-name" id="map-name">world_map.bmp (optional, for map view)</span>
+                    <input type="file" name="world_map" accept=".bmp,.png" id="map-input">
                 </label>
             </div>
             <button type="submit" class="btn btn-primary" id="upload-btn" disabled>Upload & Import</button>
@@ -164,10 +202,22 @@ function deleteWorld(worldId, worldName) {
             plusName.textContent = 'legends_plus.xml (optional, DFHack)';
             plusName.classList.remove('selected');
         }
+
+        if (mapInput.files.length > 0) {
+            mapName.textContent = mapInput.files[0].name;
+            mapName.classList.add('selected');
+        } else {
+            mapName.textContent = 'world_map.bmp (optional, for map view)';
+            mapName.classList.remove('selected');
+        }
     }
+
+    var mapInput = document.getElementById('map-input');
+    var mapName = document.getElementById('map-name');
 
     legendsInput.addEventListener('change', updateState);
     plusInput.addEventListener('change', updateState);
+    mapInput.addEventListener('change', updateState);
 
     // Handle form submission - show loading state
     uploadForm.addEventListener('submit', function(e) {

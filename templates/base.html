@@ -58,8 +58,12 @@
             </div>
             <div class="nav-links">
                 <a href="{{ url_for('figures') }}"><img src="{{ url_for('static', filename='icons/races/DWARF.png') }}" alt="" class="nav-icon">Figures</a>
+                <span class="nav-sep"></span>
                 <a href="{{ url_for('sites') }}"><img src="{{ url_for('static', filename='icons/sites/fortress.png') }}" alt="" class="nav-icon">Sites</a>
-                <a href="{{ url_for('events') }}">Events</a>
+                <span class="nav-sep"></span>
+                <a href="{{ url_for('world_map') }}" class="nav-hidden"><span class="nav-icon-text">&#9635;</span>Map</a>
+                <span class="nav-sep nav-hidden"></span>
+                <a href="{{ url_for('events') }}"><img src="{{ url_for('static', filename='icons/scribe.png') }}" alt="" class="nav-icon">Events</a>
             </div>
         </div>
     </nav>

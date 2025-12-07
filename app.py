@@ -8,7 +8,9 @@ import sqlite3
 import subprocess
 import sys
 from pathlib import Path
-from flask import Flask, render_template, request, redirect, url_for, flash, g, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, g, jsonify, send_file
+from PIL import Image
+import io
 
 # Paths
 BASE_DIR = Path(__file__).parent
@@ -267,6 +269,202 @@ def format_event_type(event_type):
     return f"{info['icon']} {info['label']}"
 
 
+def format_event_details(event):
+    """Format event details into a human-readable description."""
+    import json
+    from markupsafe import Markup
+
+    event_type = event['type'] or ''
+    normalized_type = event_type.replace(' ', '_')
+
+    parts = []
+
+    # Parse extra_data if present
+    extra = {}
+    if event['extra_data']:
+        try:
+            extra = json.loads(event['extra_data'])
+        except:
+            pass
+
+    # Get values from event or extra_data
+    hfid = event['hfid'] or extra.get('hfid') or extra.get('histfig') or extra.get('hist_figure_id')
+    site_id = event['site_id'] or extra.get('site_id')
+    civ_id = event['civ_id'] or extra.get('civ_id') or extra.get('civ')
+    entity_id = event['entity_id'] or extra.get('entity_id')
+
+    # Build description based on event type
+    if normalized_type == 'add_hf_site_link':
+        link_type = extra.get('link_type')
+        if hfid and link_type:
+            if link_type == 'lair':
+                parts.append(f"HF#{hfid} established a lair at Site#{site_id}")
+            elif link_type == 'home_site_realization_building':
+                parts.append(f"HF#{hfid} moved into building at Site#{site_id}")
+            elif link_type == 'seat_of_power':
+                parts.append(f"HF#{hfid} claimed seat of power at Site#{site_id}")
+            elif link_type == 'occupation':
+                parts.append(f"HF#{hfid} occupied Site#{site_id}")
+            elif link_type == 'home_site_abstract_building':
+                parts.append(f"HF#{hfid} took residence at Site#{site_id}")
+            elif link_type == 'hangout':
+                parts.append(f"HF#{hfid} started hanging out at Site#{site_id}")
+            else:
+                parts.append(f"HF#{hfid} linked to Site#{site_id} ({link_type.replace('_', ' ')})")
+        elif site_id:
+            parts.append(f"<span class='detail-limited'>Site#{site_id}</span>")
+
+    elif normalized_type == 'remove_hf_site_link':
+        link_type = extra.get('link_type')
+        if hfid and link_type:
+            parts.append(f"HF#{hfid} left Site#{site_id} ({link_type.replace('_', ' ')})")
+        elif site_id:
+            parts.append(f"<span class='detail-limited'>Site#{site_id}</span>")
+
+    elif normalized_type == 'add_hf_entity_link':
+        link_type = extra.get('link_type')
+        if hfid and link_type:
+            if link_type == 'member':
+                parts.append(f"HF#{hfid} joined Entity#{civ_id}")
+            elif link_type == 'position':
+                position = extra.get('position', 'a position')
+                parts.append(f"HF#{hfid} took {position} in Entity#{civ_id}")
+            elif link_type == 'former member':
+                parts.append(f"HF#{hfid} was former member of Entity#{civ_id}")
+            elif link_type == 'prisoner':
+                parts.append(f"HF#{hfid} imprisoned by Entity#{civ_id}")
+            elif link_type == 'enemy':
+                parts.append(f"HF#{hfid} became enemy of Entity#{civ_id}")
+            elif link_type == 'slave':
+                parts.append(f"HF#{hfid} enslaved by Entity#{civ_id}")
+            else:
+                parts.append(f"HF#{hfid} linked to Entity#{civ_id} ({link_type.replace('_', ' ')})")
+        elif civ_id:
+            parts.append(f"<span class='detail-limited'>Entity#{civ_id}</span>")
+
+    elif normalized_type == 'remove_hf_entity_link':
+        link_type = extra.get('link_type')
+        if hfid and link_type:
+            parts.append(f"HF#{hfid} left Entity#{civ_id} ({link_type.replace('_', ' ')})")
+        elif civ_id:
+            parts.append(f"<span class='detail-limited'>Entity#{civ_id}</span>")
+
+    elif normalized_type == 'hist_figure_died':
+        cause = event['death_cause'] or extra.get('death_cause')
+        slayer = event['slayer_hfid'] or extra.get('slayer_hfid')
+        if hfid:
+            if slayer:
+                parts.append(f"HF#{hfid} killed by HF#{slayer}")
+            else:
+                parts.append(f"HF#{hfid} died")
+            if cause:
+                parts.append(f"({cause.replace('_', ' ')})")
+            if site_id:
+                parts.append(f"at Site#{site_id}")
+        elif site_id:
+            parts.append(f"<span class='detail-limited'>Site#{site_id}</span>")
+
+    elif normalized_type == 'add_hf_hf_link':
+        hfid1 = extra.get('hfid1') or extra.get('hf') or hfid
+        hfid2 = extra.get('hfid2') or extra.get('hf_target')
+        link_type = extra.get('link_type')
+        if hfid1 and hfid2:
+            rel = link_type.replace('_', ' ') if link_type else 'relationship'
+            parts.append(f"HF#{hfid1} and HF#{hfid2} formed {rel}")
+        else:
+            parts.append("<span class='detail-limited'>-</span>")
+
+    elif normalized_type == 'artifact_created':
+        artifact_id = event['artifact_id'] or extra.get('artifact_id')
+        if hfid and artifact_id:
+            parts.append(f"HF#{hfid} created Artifact#{artifact_id}")
+            if site_id:
+                parts.append(f"at Site#{site_id}")
+        elif artifact_id:
+            parts.append(f"Artifact#{artifact_id} created")
+            if site_id:
+                parts.append(f"at Site#{site_id}")
+        else:
+            parts.append("<span class='detail-limited'>-</span>")
+
+    elif normalized_type == 'change_hf_state':
+        state = event['state'] or extra.get('state')
+        reason = event['reason'] or extra.get('reason')
+        if hfid and state:
+            parts.append(f"HF#{hfid} became {state.replace('_', ' ')}")
+            if site_id:
+                parts.append(f"at Site#{site_id}")
+            if reason:
+                parts.append(f"({reason.replace('_', ' ')})")
+        elif site_id:
+            parts.append(f"<span class='detail-limited'>Site#{site_id}</span>")
+
+    elif normalized_type == 'change_hf_job':
+        new_job = extra.get('new_job')
+        old_job = extra.get('old_job')
+        if hfid and new_job:
+            if old_job:
+                parts.append(f"HF#{hfid} changed from {old_job.replace('_', ' ')} to {new_job.replace('_', ' ')}")
+            else:
+                parts.append(f"HF#{hfid} became {new_job.replace('_', ' ')}")
+            if site_id:
+                parts.append(f"at Site#{site_id}")
+        elif site_id:
+            parts.append(f"<span class='detail-limited'>Site#{site_id}</span>")
+
+    elif normalized_type == 'created_site':
+        site_civ_id = extra.get('site_civ_id')
+        if civ_id and site_id:
+            parts.append(f"Entity#{civ_id} founded Site#{site_id}")
+        elif site_id:
+            parts.append(f"Site#{site_id} founded")
+
+    elif normalized_type == 'created_building' or normalized_type == 'created_structure':
+        structure_id = event['structure_id'] or extra.get('structure_id')
+        if hfid and structure_id:
+            parts.append(f"HF#{hfid} built Structure#{structure_id}")
+        elif structure_id:
+            parts.append(f"Structure#{structure_id} built")
+        if site_id:
+            parts.append(f"at Site#{site_id}")
+
+    elif normalized_type == 'hf_destroyed_site':
+        if hfid and site_id:
+            parts.append(f"HF#{hfid} destroyed Site#{site_id}")
+        elif site_id:
+            parts.append(f"Site#{site_id} destroyed")
+
+    elif normalized_type == 'hf_attacked_site':
+        if hfid and site_id:
+            parts.append(f"HF#{hfid} attacked Site#{site_id}")
+        elif site_id:
+            parts.append(f"Site#{site_id} attacked")
+
+    else:
+        # Generic fallback - show available IDs
+        shown = []
+        if hfid:
+            shown.append(f"HF#{hfid}")
+        if site_id:
+            shown.append(f"Site#{site_id}")
+        if civ_id:
+            shown.append(f"Civ#{civ_id}")
+        if entity_id:
+            shown.append(f"Entity#{entity_id}")
+        # Show any interesting extra data
+        for key in ['link_type', 'state', 'reason', 'cause', 'interaction']:
+            if key in extra and extra[key]:
+                val = str(extra[key]).replace('_', ' ')
+                shown.append(f"{key}: {val}")
+
+        if shown:
+            parts.append(', '.join(shown))
+        else:
+            parts.append('-')
+
+    return Markup(' '.join(parts) if parts else '-')
+
+
 def get_structure_type_info(struct_type):
     """Get structure type label, text icon, and image icon path."""
     if not struct_type:
@@ -383,6 +581,7 @@ app.jinja_env.filters['event_type_label'] = format_event_type
 app.jinja_env.globals['get_race_info'] = get_race_info
 app.jinja_env.globals['get_site_type_info'] = get_site_type_info
 app.jinja_env.globals['get_event_type_info'] = get_event_type_info
+app.jinja_env.globals['format_event_details'] = format_event_details
 
 
 def get_master_db():
@@ -394,12 +593,15 @@ def get_master_db():
         # Initialize schema if needed
         with open(MASTER_SCHEMA_PATH) as f:
             g.master_db.executescript(f.read())
-        # Migration: add has_plus column if it doesn't exist
+        # Migration: add has_plus and has_map columns if they don't exist
         cursor = g.master_db.cursor()
         cursor.execute("PRAGMA table_info(worlds)")
         columns = [row[1] for row in cursor.fetchall()]
         if 'has_plus' not in columns:
             cursor.execute("ALTER TABLE worlds ADD COLUMN has_plus INTEGER DEFAULT 0")
+            g.master_db.commit()
+        if 'has_map' not in columns:
+            cursor.execute("ALTER TABLE worlds ADD COLUMN has_map INTEGER DEFAULT 0")
             g.master_db.commit()
     return g.master_db
 
@@ -556,6 +758,27 @@ def delete_world(world_id):
     return redirect(url_for('index'))
 
 
+def save_world_map(world_id, map_file):
+    """Save world map image, converting BMP to PNG if needed."""
+    try:
+        # Read image
+        img = Image.open(map_file)
+
+        # Save as PNG in worlds directory
+        map_path = DATA_DIR / 'worlds' / f'{world_id}_map.png'
+        img.save(map_path, 'PNG')
+
+        # Update has_map flag
+        db = get_master_db()
+        db.execute("UPDATE worlds SET has_map = 1 WHERE id = ?", (world_id,))
+        db.commit()
+
+        return True
+    except Exception as e:
+        print(f"Error saving map: {e}")
+        return False
+
+
 @app.route('/upload', methods=['POST'])
 def upload():
     """Handle file upload and run import."""
@@ -566,6 +789,7 @@ def upload():
 
     legends_file = request.files['legends']
     plus_file = request.files.get('legends_plus')
+    map_file = request.files.get('world_map')
 
     # Create uploads directory
     upload_dir = DATA_DIR / 'uploads'
@@ -595,6 +819,16 @@ def upload():
 
         if result.returncode == 0:
             flash('Import completed successfully!', 'success')
+
+            # If map file provided, save it for the newly created world
+            if map_file and map_file.filename:
+                # Get the world that was just created (most recent)
+                world = get_current_world()
+                if world:
+                    if save_world_map(world['id'], map_file):
+                        flash('World map uploaded!', 'success')
+                    else:
+                        flash('Failed to save world map', 'error')
         else:
             flash(f'Import failed: {result.stderr}', 'error')
 
@@ -678,6 +912,44 @@ def merge_plus(world_id):
             plus_path.unlink()
 
     return redirect(url_for('index'))
+
+
+@app.route('/upload-map/<world_id>', methods=['POST'])
+def upload_map(world_id):
+    """Upload world map image for an existing world."""
+    db = get_master_db()
+    cursor = db.cursor()
+
+    # Get world info
+    world = cursor.execute("SELECT * FROM worlds WHERE id = ?", (world_id,)).fetchone()
+    if not world:
+        flash('World not found', 'error')
+        return redirect(url_for('index'))
+
+    # Check for map file
+    if 'world_map' not in request.files or request.files['world_map'].filename == '':
+        flash('Map file is required', 'error')
+        return redirect(url_for('index'))
+
+    map_file = request.files['world_map']
+
+    if save_world_map(world_id, map_file):
+        flash('World map uploaded successfully!', 'success')
+    else:
+        flash('Failed to save world map', 'error')
+
+    return redirect(url_for('index'))
+
+
+@app.route('/world-map-image/<world_id>')
+def world_map_image(world_id):
+    """Serve the world map image."""
+    map_path = DATA_DIR / 'worlds' / f'{world_id}_map.png'
+    if map_path.exists():
+        return send_file(map_path, mimetype='image/png')
+    else:
+        # Return a 1x1 transparent PNG as fallback
+        return '', 404
 
 
 @app.route('/build-output')
@@ -941,6 +1213,79 @@ def site_structures(site_id):
         structures_list.append(struct)
 
     return jsonify({'structures': structures_list})
+
+
+@app.route('/map')
+def world_map():
+    """Display world map with sites."""
+    db = get_db()
+    if not db:
+        flash('Database not found. Run import first.', 'error')
+        return redirect(url_for('index'))
+
+    current_world = get_current_world()
+
+    # Get all sites with coordinates
+    sites_data = db.execute("""
+        SELECT s.id, s.name, s.type, s.coords, e.race as civ_race
+        FROM sites s
+        LEFT JOIN entities e ON s.civ_id = e.id
+        WHERE s.coords IS NOT NULL AND s.coords != ''
+    """).fetchall()
+
+    # Parse coordinates and find bounds
+    sites_list = []
+    min_x, max_x, min_y, max_y = float('inf'), 0, float('inf'), 0
+
+    for row in sites_data:
+        site = dict(row)
+        try:
+            x, y = map(int, site['coords'].split(','))
+            site['x'] = x
+            site['y'] = y
+            min_x, max_x = min(min_x, x), max(max_x, x)
+            min_y, max_y = min(min_y, y), max(max_y, y)
+
+            type_info = get_site_type_info(site.get('type'))
+            site['type_label'] = type_info['label']
+            site['type_icon'] = type_info['icon']
+            site['type_img'] = type_info['img']
+
+            if site.get('civ_race'):
+                race_info = get_race_info(site['civ_race'].upper())
+                site['civ_label'] = race_info['label']
+            else:
+                site['civ_label'] = None
+
+            sites_list.append(site)
+        except (ValueError, AttributeError):
+            continue
+
+    # Calculate map dimensions
+    map_width = max_x - min_x + 1 if max_x >= min_x else 1
+    map_height = max_y - min_y + 1 if max_y >= min_y else 1
+
+    # Get site type counts for legend
+    type_counts = db.execute("""
+        SELECT type, COUNT(*) as count FROM sites
+        WHERE coords IS NOT NULL AND coords != ''
+        GROUP BY type ORDER BY count DESC
+    """).fetchall()
+
+    # Check if map image exists
+    has_map = current_world and current_world.get('has_map')
+    world_id = current_world['id'] if current_world else None
+
+    return render_template('map.html',
+                         sites=sites_list,
+                         min_x=min_x if min_x != float('inf') else 0,
+                         min_y=min_y if min_y != float('inf') else 0,
+                         map_width=map_width,
+                         map_height=map_height,
+                         type_counts=type_counts,
+                         total_sites=len(sites_list),
+                         has_map=has_map,
+                         world_id=world_id)
 
 
 @app.route('/events')

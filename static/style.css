@@ -40,9 +40,12 @@ nav {
 nav a {
     color: #ff0;
     text-decoration: none;
-    margin-right: 2rem;
     text-transform: uppercase;
     letter-spacing: 1px;
+}
+
+.nav-brand a {
+    margin-right: 2rem;
 }
 
 nav a:hover {
@@ -56,6 +59,25 @@ nav a:hover {
     vertical-align: middle;
     margin-right: 0.5rem;
     image-rendering: pixelated;
+}
+
+.nav-sep {
+    display: inline-block;
+    border-left: 1px solid #444;
+    border-right: 1px solid #444;
+    height: 16px;
+    vertical-align: middle;
+    margin: 0 0.5rem;
+}
+
+.nav-icon-text {
+    font-size: 16px;
+    vertical-align: middle;
+    margin-right: 0.5rem;
+}
+
+.nav-hidden {
+    display: none;
 }
 
 /* Main Container */
@@ -279,6 +301,17 @@ th.col-disabled {
 
 th.col-disabled:hover {
     color: #f80;
+}
+
+/* Event details */
+.event-details {
+    color: #888;
+    font-size: 13px;
+}
+
+.event-details .detail-limited {
+    color: #555;
+    font-style: italic;
 }
 
 .stat-value {
@@ -1014,4 +1047,196 @@ a:hover {
 @keyframes flicker {
     0%, 100% { opacity: 0.4; }
     50% { opacity: 1; }
+}
+
+/* World Map */
+.map-container {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+
+.map-controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    align-items: center;
+}
+
+.map-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    background: #111;
+    border: 2px solid #444;
+    color: #0f0;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.map-btn:hover {
+    background: #0f0;
+    color: #000;
+    border-color: #0f0;
+}
+
+.map-info {
+    margin-left: auto;
+    color: #666;
+    font-size: 12px;
+}
+
+.map-viewport {
+    width: 100%;
+    height: 600px;
+    background: #0a0a0a;
+    border: 2px solid #333;
+    overflow: hidden;
+    cursor: grab;
+    position: relative;
+}
+
+.map-canvas {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-origin: center center;
+    transition: transform 0.1s ease-out;
+}
+
+.map-canvas.has-bg {
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+}
+
+.map-marker {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    z-index: 1;
+    transition: transform 0.1s, z-index 0s;
+}
+
+.map-marker:hover {
+    z-index: 100;
+    transform: translate(-50%, -50%) scale(1.5);
+}
+
+.marker-icon {
+    width: 16px;
+    height: 16px;
+    image-rendering: pixelated;
+    display: block;
+}
+
+.marker-text {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    font-weight: bold;
+    text-shadow: 0 0 3px #000, 1px 1px 0 #000;
+}
+
+/* Site type marker colors */
+.map-marker.type-fortress .marker-text,
+.map-marker.type-mountain-halls .marker-text { color: #f80; }
+.map-marker.type-hillocks .marker-text { color: #fa0; }
+.map-marker.type-dark-fortress .marker-text,
+.map-marker.type-dark-pits .marker-text { color: #f00; }
+.map-marker.type-forest-retreat .marker-text { color: #0f0; }
+.map-marker.type-town .marker-text,
+.map-marker.type-hamlet .marker-text { color: #ff0; }
+.map-marker.type-castle .marker-text,
+.map-marker.type-fort .marker-text { color: #0ff; }
+.map-marker.type-tower .marker-text { color: #f0f; }
+.map-marker.type-cave .marker-text,
+.map-marker.type-lair .marker-text { color: #888; }
+.map-marker.type-tomb .marker-text { color: #666; }
+.map-marker.type-camp .marker-text { color: #a86; }
+.map-marker.type-monastery .marker-text,
+.map-marker.type-shrine .marker-text { color: #fff; }
+.map-marker.type-labyrinth .marker-text,
+.map-marker.type-vault .marker-text { color: #a0f; }
+
+.map-tooltip {
+    position: fixed;
+    background: #111;
+    border: 2px solid #444;
+    padding: 0.5rem 0.75rem;
+    font-size: 12px;
+    color: #fff;
+    pointer-events: none;
+    z-index: 1000;
+    display: none;
+    max-width: 250px;
+}
+
+.map-tooltip strong {
+    color: #ff0;
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.tooltip-civ {
+    color: #0ff;
+    font-size: 11px;
+}
+
+/* Map Legend */
+.map-legend {
+    background: #111;
+    border: 2px solid #333;
+    padding: 1rem;
+}
+
+.map-legend h3 {
+    margin-bottom: 0.75rem;
+}
+
+.legend-items {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.5rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    transition: background 0.2s;
+}
+
+.legend-item:hover {
+    background: #1a1a1a;
+}
+
+.legend-item input[type="checkbox"] {
+    accent-color: #0f0;
+}
+
+.legend-icon {
+    width: 16px;
+    height: 16px;
+    image-rendering: pixelated;
+}
+
+.legend-icon-text {
+    width: 16px;
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+}
+
+.legend-label {
+    color: #aaa;
+    font-size: 12px;
+}
+
+.legend-count {
+    color: #666;
+    font-size: 11px;
+    margin-left: auto;
 }

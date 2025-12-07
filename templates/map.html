@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}World Map - DF-World{% endblock %}
+
+{% block content %}
+<h1>World Map</h1>
+
+<div class="map-container">
+    <div class="map-controls">
+        <button id="zoom-in" class="map-btn" title="Zoom In">+</button>
+        <button id="zoom-out" class="map-btn" title="Zoom Out">-</button>
+        <button id="zoom-reset" class="map-btn" title="Reset">R</button>
+        <span class="map-info">{{ total_sites }} sites{% if not has_map %} | <a href="{{ url_for('index') }}">Upload map image</a>{% endif %}</span>
+    </div>
+
+    <div class="map-viewport" id="map-viewport">
+        <div class="map-canvas{% if has_map %} has-bg{% endif %}" id="map-canvas"
+             {% if has_map %}style="background-image: url('{{ url_for('world_map_image', world_id=world_id) }}');"{% endif %}>
+            {% for site in sites %}
+            <div class="map-marker type-{{ site.type|replace(' ', '-') }}"
+                 data-id="{{ site.id }}"
+                 data-name="{{ site.name }}"
+                 data-type="{{ site.type_label }}"
+                 data-civ="{{ site.civ_label or '' }}"
+                 style="left: {{ ((site.x - min_x) / map_width * 100) }}%; top: {{ ((site.y - min_y) / map_height * 100) }}%;"
+                 title="{{ site.name }}">
+                {% if site.type_img %}
+                <img src="{{ site.type_img }}" alt="{{ site.type_icon }}" class="marker-icon">
+                {% else %}
+                <span class="marker-text">{{ site.type_icon }}</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="map-tooltip" id="map-tooltip"></div>
+</div>
+
+<div class="map-legend">
+    <h3>Legend</h3>
+    <div class="legend-items">
+        {% for tc in type_counts %}
+        {% set ti = get_site_type_info(tc.type) %}
+        <label class="legend-item">
+            <input type="checkbox" checked data-type="{{ tc.type|replace(' ', '-') }}" class="legend-toggle">
+            {% if ti.img %}
+            <img src="{{ ti.img }}" alt="{{ ti.icon }}" class="legend-icon">
+            {% else %}
+            <span class="legend-icon-text">{{ ti.icon }}</span>
+            {% endif %}
+            <span class="legend-label">{{ ti.label }}</span>
+            <span class="legend-count">({{ tc.count }})</span>
+        </label>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+(function() {
+    var viewport = document.getElementById('map-viewport');
+    var canvas = document.getElementById('map-canvas');
+    var tooltip = document.getElementById('map-tooltip');
+    var markers = document.querySelectorAll('.map-marker');
+
+    var scale = 1;
+    var minScale = 0.5;
+    var maxScale = 5;
+    var panX = 0, panY = 0;
+    var isDragging = false;
+    var startX, startY, startPanX, startPanY;
+
+    function updateTransform() {
+        canvas.style.transform = 'translate(' + panX + 'px, ' + panY + 'px) scale(' + scale + ')';
+    }
+
+    // Zoom controls
+    document.getElementById('zoom-in').addEventListener('click', function() {
+        scale = Math.min(maxScale, scale * 1.3);
+        updateTransform();
+    });
+
+    document.getElementById('zoom-out').addEventListener('click', function() {
+        scale = Math.max(minScale, scale / 1.3);
+        updateTransform();
+    });
+
+    document.getElementById('zoom-reset').addEventListener('click', function() {
+        scale = 1;
+        panX = 0;
+        panY = 0;
+        updateTransform();
+    });
+
+    // Mouse wheel zoom
+    viewport.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        var delta = e.deltaY > 0 ? 0.9 : 1.1;
+        scale = Math.max(minScale, Math.min(maxScale, scale * delta));
+        updateTransform();
+    });
+
+    // Pan with drag
+    viewport.addEventListener('mousedown', function(e) {
+        if (e.target.classList.contains('map-marker') || e.target.closest('.map-marker')) return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        startPanX = panX;
+        startPanY = panY;
+        viewport.style.cursor = 'grabbing';
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        panX = startPanX + (e.clientX - startX);
+        panY = startPanY + (e.clientY - startY);
+        updateTransform();
+    });
+
+    document.addEventListener('mouseup', function() {
+        isDragging = false;
+        viewport.style.cursor = 'grab';
+    });
+
+    // Marker tooltips
+    markers.forEach(function(marker) {
+        marker.addEventListener('mouseenter', function(e) {
+            var name = marker.dataset.name || 'Unknown';
+            var type = marker.dataset.type || '';
+            var civ = marker.dataset.civ;
+
+            var html = '<strong>' + name + '</strong><br>' + type;
+            if (civ) html += '<br><span class="tooltip-civ">' + civ + '</span>';
+
+            tooltip.innerHTML = html;
+            tooltip.style.display = 'block';
+        });
+
+        marker.addEventListener('mousemove', function(e) {
+            tooltip.style.left = (e.clientX + 15) + 'px';
+            tooltip.style.top = (e.clientY + 15) + 'px';
+        });
+
+        marker.addEventListener('mouseleave', function() {
+            tooltip.style.display = 'none';
+        });
+
+        marker.addEventListener('click', function() {
+            var id = marker.dataset.id;
+            // Could link to site detail page when implemented
+            console.log('Site clicked:', id, marker.dataset.name);
+        });
+    });
+
+    // Legend toggle
+    document.querySelectorAll('.legend-toggle').forEach(function(checkbox) {
+        checkbox.addEventListener('change', function() {
+            var type = this.dataset.type;
+            var visible = this.checked;
+            document.querySelectorAll('.map-marker.type-' + type).forEach(function(m) {
+                m.style.display = visible ? '' : 'none';
+            });
+        });
+    });
+})();
+</script>
+{% endblock %}

@@ -525,20 +525,33 @@ def run_import(legends_path=None, plus_path=None):
             count = stream_elements(legends_plus_clean, 'historical_event', import_event_plus)
         else:
             # Import events from legends.xml only (less detailed but has year)
+            basic_known_fields = {'id', 'year', 'type', 'site_id', 'hfid', 'civ_id',
+                                  'slayer_hfid', 'death_cause', 'artifact_id', 'entity_id', 'structure_id'}
             def import_event_basic(data):
                 # Extract simple values, handling cases where field might be a dict/list
-                hfid = data.get('hfid')
-                if isinstance(hfid, (dict, list)):
-                    hfid = None  # Complex structure, skip
-                site_id = data.get('site_id')
-                if isinstance(site_id, (dict, list)):
-                    site_id = None
+                def safe_get(key):
+                    val = data.get(key)
+                    if isinstance(val, (dict, list)):
+                        return None
+                    return val
+
+                # Collect extra fields
+                extra = {}
+                for k, v in data.items():
+                    if k not in basic_known_fields:
+                        if isinstance(v, (str, int, float)) or v is None:
+                            extra[k] = v
+
                 cursor.execute(
                     """INSERT INTO historical_events
-                       (id, year, type, site_id, hfid)
-                       VALUES (?, ?, ?, ?, ?)""",
-                    (data.get('id'), data.get('year'), data.get('type'),
-                     site_id, hfid)
+                       (id, year, type, site_id, hfid, civ_id, slayer_hfid,
+                        death_cause, artifact_id, entity_id, structure_id, extra_data)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (safe_get('id'), safe_get('year'), safe_get('type'),
+                     safe_get('site_id'), safe_get('hfid'), safe_get('civ_id'),
+                     safe_get('slayer_hfid'), safe_get('death_cause'),
+                     safe_get('artifact_id'), safe_get('entity_id'), safe_get('structure_id'),
+                     json.dumps(extra) if extra else None)
                 )
             count = stream_elements(legends_clean, 'historical_event', import_event_basic)
         conn.commit()
