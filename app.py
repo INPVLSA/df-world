@@ -514,6 +514,8 @@ def sites():
     """List sites."""
     db = get_db()
     if not db:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'error': 'Database not found'})
         flash('Database not found. Run import first.', 'error')
         return redirect(url_for('index'))
 
@@ -521,6 +523,7 @@ def sites():
     per_page = 50
     offset = (page - 1) * per_page
 
+    search = request.args.get('q', '')
     type_filter = request.args.get('type', '')
 
     # Sorting
@@ -535,11 +538,21 @@ def sites():
         sort_dir = 'asc'
 
     query = "SELECT * FROM sites WHERE 1=1"
+    count_query = "SELECT COUNT(*) FROM sites WHERE 1=1"
     params = []
+    count_params = []
+
+    if search:
+        query += " AND name LIKE ?"
+        count_query += " AND name LIKE ?"
+        params.append(f'%{search}%')
+        count_params.append(f'%{search}%')
 
     if type_filter:
         query += " AND type = ?"
+        count_query += " AND type = ?"
         params.append(type_filter)
+        count_params.append(type_filter)
 
     # Handle NULL sorting (NULLs last for ASC, first for DESC)
     if sort_dir == 'asc':
@@ -551,13 +564,28 @@ def sites():
     params.extend([per_page, offset])
 
     sites_data = db.execute(query, params).fetchall()
-    count_query = "SELECT COUNT(*) FROM sites"
-    count_params = []
-    if type_filter:
-        count_query += " WHERE type = ?"
-        count_params.append(type_filter)
     total = db.execute(count_query, count_params).fetchone()[0]
     total_pages = (total + per_page - 1) // per_page
+
+    # AJAX request - return JSON
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        sites_list = []
+        for row in sites_data:
+            site = dict(row)
+            type_info = get_site_type_info(site.get('type'))
+            site['type_label'] = type_info['label']
+            site['type_icon'] = type_info['icon']
+            site['type_img'] = type_info['img']
+            sites_list.append(site)
+        return jsonify({
+            'sites': sites_list,
+            'total': total,
+            'total_pages': total_pages,
+            'page': page,
+            'per_page': per_page,
+            'sort': sort_col,
+            'dir': sort_dir
+        })
 
     # Get unique types for filter
     types = db.execute("SELECT DISTINCT type FROM sites WHERE type IS NOT NULL ORDER BY type").fetchall()
@@ -568,6 +596,7 @@ def sites():
                          total=total,
                          total_pages=total_pages,
                          per_page=per_page,
+                         search=search,
                          type_filter=type_filter,
                          types=types,
                          sort=sort_col,

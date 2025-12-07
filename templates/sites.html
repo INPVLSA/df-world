@@ -6,17 +6,18 @@
 {% block content %}
 <h1>Sites</h1>
 
-<form class="filters" method="get" id="filter-form">
-    <select name="type" onchange="this.form.submit()">
+<div class="filters">
+    <input type="text" id="search-input" placeholder="Search by name..." value="{{ search }}">
+    <select id="type-select">
         <option value="">All Types</option>
         {% for t in types %}
         <option value="{{ t.type }}" {% if type_filter == t.type %}selected{% endif %}>{{ t.type|site_type_label }}</option>
         {% endfor %}
     </select>
-    <a href="{{ url_for('sites') }}" class="btn btn-clear{% if not type_filter %} disabled{% endif %}">Clear</a>
-</form>
+    <button type="button" id="clear-filters" class="btn btn-clear"{% if not search and not type_filter %} disabled{% endif %}>Clear</button>
+</div>
 
-<p class="results-info">Showing {{ sites|length }} of {{ "{:,}".format(total) }} sites</p>
+<p class="results-info">Showing <span id="showing-count">{{ sites|length }}</span> of <span id="total-count">{{ "{:,}".format(total) }}</span> sites</p>
 
 <table>
     <thead>
@@ -28,7 +29,7 @@
             <th>Civ ID</th>
         </tr>
     </thead>
-    <tbody>
+    <tbody id="sites-tbody">
         {% for site in sites %}
         <tr>
             <td>{{ site.id }}</td>
@@ -41,13 +42,159 @@
     </tbody>
 </table>
 
-{{ pagination(page, total_pages, '?type=' ~ type_filter ~ '&sort=' ~ sort ~ '&dir=' ~ dir) }}
+<div class="pagination" id="pagination">
+    {{ pagination(page, total_pages, '?q=' ~ search ~ '&type=' ~ type_filter ~ '&sort=' ~ sort ~ '&dir=' ~ dir) }}
+</div>
 
 <script>
 (function() {
+    var searchInput = document.getElementById('search-input');
+    var typeSelect = document.getElementById('type-select');
+    var clearBtn = document.getElementById('clear-filters');
+    var tbody = document.getElementById('sites-tbody');
     var thead = document.querySelector('table thead');
+    var showingCount = document.getElementById('showing-count');
+    var totalCount = document.getElementById('total-count');
+    var paginationContainer = document.getElementById('pagination');
+
+    var timeout = null;
+    var currentPage = {{ page }};
+    var perPage = {{ per_page }};
     var currentSort = '{{ sort }}';
     var currentDir = '{{ dir }}';
+
+    function formatNumber(n) {
+        return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    function titleCase(str) {
+        if (!str) return '(unnamed)';
+        return str.replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+    }
+
+    function renderPagination(page, totalPages) {
+        var html = '<div class="pagination">';
+
+        if (page > 1) {
+            html += '<a href="#" data-page="1" class="page-btn" title="First">&laquo;</a>';
+            html += '<a href="#" data-page="' + (page - 1) + '" class="page-btn" title="Previous">&lsaquo;</a>';
+        } else {
+            html += '<span class="page-btn disabled">&laquo;</span>';
+            html += '<span class="page-btn disabled">&lsaquo;</span>';
+        }
+
+        var startPage = Math.max(page - 2, 1);
+        var endPage = Math.min(page + 2, totalPages);
+
+        if (startPage > 1) {
+            html += '<a href="#" data-page="1" class="page-num">1</a>';
+            if (startPage > 2) html += '<span class="page-ellipsis">...</span>';
+        }
+
+        for (var p = startPage; p <= endPage; p++) {
+            if (p === page) {
+                html += '<span class="page-num active">' + p + '</span>';
+            } else {
+                html += '<a href="#" data-page="' + p + '" class="page-num">' + p + '</a>';
+            }
+        }
+
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) html += '<span class="page-ellipsis">...</span>';
+            html += '<a href="#" data-page="' + totalPages + '" class="page-num">' + totalPages + '</a>';
+        }
+
+        if (page < totalPages) {
+            html += '<a href="#" data-page="' + (page + 1) + '" class="page-btn" title="Next">&rsaquo;</a>';
+            html += '<a href="#" data-page="' + totalPages + '" class="page-btn" title="Last">&raquo;</a>';
+        } else {
+            html += '<span class="page-btn disabled">&rsaquo;</span>';
+            html += '<span class="page-btn disabled">&raquo;</span>';
+        }
+
+        html += '</div>';
+        return html;
+    }
+
+    function updateSortHeaders(sortCol, sortDir) {
+        thead.querySelectorAll('th.sortable').forEach(function(th) {
+            th.classList.remove('sorted', 'asc', 'desc');
+            if (th.dataset.sort === sortCol) {
+                th.classList.add('sorted', sortDir);
+            }
+        });
+    }
+
+    function fetchData(page, sort, dir) {
+        var params = new URLSearchParams();
+        params.set('page', page);
+        if (searchInput.value) params.set('q', searchInput.value);
+        if (typeSelect.value) params.set('type', typeSelect.value);
+        params.set('sort', sort);
+        params.set('dir', dir);
+
+        history.replaceState(null, '', '?' + params.toString());
+
+        fetch('/sites?' + params.toString(), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            currentPage = data.page;
+            currentSort = data.sort;
+            currentDir = data.dir;
+
+            var html = '';
+            data.sites.forEach(function(site) {
+                html += '<tr>' +
+                    '<td>' + site.id + '</td>' +
+                    '<td>' + titleCase(site.name) + '</td>' +
+                    '<td class="type-cell">' + (site.type_img ? '<img src="' + site.type_img + '" class="type-icon" alt="">' : '<span class="type-icon-text">' + site.type_icon + '</span>') + ' ' + site.type_label + '</td>' +
+                    '<td>' + (site.coords || '-') + '</td>' +
+                    '<td>' + (site.civ_id != null ? site.civ_id : '-') + '</td>' +
+                '</tr>';
+            });
+            tbody.innerHTML = html;
+
+            showingCount.textContent = data.sites.length;
+            totalCount.textContent = formatNumber(data.total);
+
+            paginationContainer.innerHTML = renderPagination(data.page, data.total_pages);
+            updateSortHeaders(data.sort, data.dir);
+        });
+    }
+
+    function updateClearButton() {
+        clearBtn.disabled = !searchInput.value && !typeSelect.value;
+    }
+
+    searchInput.addEventListener('input', function() {
+        clearTimeout(timeout);
+        timeout = setTimeout(function() {
+            fetchData(1, currentSort, currentDir);
+        }, 300);
+        updateClearButton();
+    });
+
+    typeSelect.addEventListener('change', function() {
+        fetchData(1, currentSort, currentDir);
+        updateClearButton();
+    });
+
+    clearBtn.addEventListener('click', function() {
+        searchInput.value = '';
+        typeSelect.value = '';
+        updateClearButton();
+        fetchData(1, 'name', 'asc');
+    });
+
+    paginationContainer.addEventListener('click', function(e) {
+        var target = e.target.closest('[data-page]');
+        if (target) {
+            e.preventDefault();
+            fetchData(parseInt(target.dataset.page), currentSort, currentDir);
+        }
+    });
 
     thead.addEventListener('click', function(e) {
         var th = e.target.closest('th.sortable');
@@ -57,11 +204,7 @@
             if (col === currentSort) {
                 newDir = currentDir === 'asc' ? 'desc' : 'asc';
             }
-            var params = new URLSearchParams(window.location.search);
-            params.set('sort', col);
-            params.set('dir', newDir);
-            params.set('page', '1');
-            window.location.search = params.toString();
+            fetchData(1, col, newDir);
         }
     });
 })();
