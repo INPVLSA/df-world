@@ -52,13 +52,15 @@
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-brand">
-            <a href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='ico.png') }}" alt="" class="nav-icon">DF-World</a>
-        </div>
-        <div class="nav-links">
-            <a href="{{ url_for('figures') }}">Figures</a>
-            <a href="{{ url_for('sites') }}">Sites</a>
-            <a href="{{ url_for('events') }}">Events</a>
+        <div class="nav-container">
+            <div class="nav-brand">
+                <a href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='ico.png') }}" alt="" class="nav-icon">DF-World</a>
+            </div>
+            <div class="nav-links">
+                <a href="{{ url_for('figures') }}"><img src="{{ url_for('static', filename='icons/races/DWARF.png') }}" alt="" class="nav-icon">Figures</a>
+                <a href="{{ url_for('sites') }}"><img src="{{ url_for('static', filename='icons/sites/fortress.png') }}" alt="" class="nav-icon">Sites</a>
+                <a href="{{ url_for('events') }}">Events</a>
+            </div>
         </div>
     </nav>
 
@@ -75,7 +77,28 @@
     </main>
 
     <footer class="footer">
-        <p>DF-World - Dwarf Fortress Legends Viewer</p>
+        <div class="footer-content">
+            <div class="footer-brand">
+                <span class="footer-logo">DF-World</span>
+                <span class="footer-tagline">Dwarf Fortress Legends Viewer</span>
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/inpvlsa/df-world" target="_blank" rel="noopener">GitHub</a>
+                <span class="footer-sep">|</span>
+                <a href="https://ko-fi.com/inpvlsa" target="_blank" rel="noopener">Support</a>
+            </div>
+            <div class="footer-deco">
+                <span class="deco-char">&#9617;</span>
+                <span class="deco-char">&#9618;</span>
+                <span class="deco-char">&#9619;</span>
+                <span class="deco-char">&#9608;</span>
+                <span class="deco-text">Strike the Earth!</span>
+                <span class="deco-char">&#9608;</span>
+                <span class="deco-char">&#9619;</span>
+                <span class="deco-char">&#9618;</span>
+                <span class="deco-char">&#9617;</span>
+            </div>
+        </div>
     </footer>
 </body>
 </html>

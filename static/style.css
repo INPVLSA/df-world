@@ -1,6 +1,10 @@
 /* Dwarf Fortress Style Theme */
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
+/* ===========================================
+   Critical Styles - Above the fold
+   =========================================== */
+
 * {
     box-sizing: border-box;
 }
@@ -15,12 +19,18 @@ body {
     font-size: 14px;
 }
 
+/* Navigation */
 nav {
     background: #000;
-    padding: 0.75rem 1.5rem;
     border-bottom: 2px solid #333;
     font-family: 'Press Start 2P', monospace;
     font-size: 10px;
+}
+
+.nav-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0.75rem 1.5rem;
     display: flex;
     align-items: center;
     justify-content: flex-start;
@@ -48,11 +58,16 @@ nav a:hover {
     image-rendering: pixelated;
 }
 
+/* Main Container */
 main {
     max-width: 1200px;
     margin: 0 auto;
     padding: 1.5rem;
 }
+
+/* ===========================================
+   End Critical Styles
+   =========================================== */
 
 h1 {
     font-family: 'Press Start 2P', monospace;
@@ -180,6 +195,90 @@ h3 {
 
 .stat-card:hover {
     border-color: #0f0;
+}
+
+.stat-card.stat-disabled {
+    opacity: 0.5;
+    border-color: #222;
+    cursor: help;
+}
+
+.stat-card.stat-disabled:hover {
+    border-color: #f80;
+}
+
+.stat-card.stat-disabled .stat-value {
+    color: #444;
+    text-shadow: none;
+}
+
+.stat-hint {
+    display: block;
+    font-size: 0.7rem;
+    color: #f80;
+    margin-top: 0.25rem;
+}
+
+/* Title suffix (grayed when disabled) */
+.title-suffix {
+    color: #f80;
+}
+
+.title-suffix.disabled {
+    color: #444;
+    cursor: help;
+}
+
+/* Expand icon for no-plus state */
+.expand-icon.no-plus {
+    color: #f80;
+    cursor: pointer;
+}
+
+.site-row:hover .expand-icon.no-plus {
+    text-shadow: 0 0 5px #f80;
+}
+
+/* Missing structures message */
+.structures-missing {
+    color: #f80;
+    font-size: 13px;
+    padding: 1rem;
+}
+
+.structures-missing .missing-icon {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    text-align: center;
+    background: #f80;
+    color: #000;
+    font-weight: bold;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+}
+
+.structures-missing code {
+    background: #000;
+    padding: 0.2rem 0.5rem;
+    color: #0ff;
+    border: 1px solid #333;
+}
+
+.structures-missing a {
+    color: #0ff;
+    margin-left: 0.25rem;
+}
+
+/* Disabled column header */
+th.col-disabled {
+    color: #444;
+    cursor: help;
+}
+
+th.col-disabled:hover {
+    color: #f80;
 }
 
 .stat-value {
@@ -820,4 +919,99 @@ a:hover {
 .merge-label {
     flex: 1;
     min-width: 200px;
+}
+
+/* Footer */
+.footer {
+    margin-top: 3rem;
+    padding: 2rem 1.5rem;
+    background: linear-gradient(to bottom, #0a0a0a, #000);
+    border-top: 2px solid #333;
+}
+
+.footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.footer-brand {
+    margin-bottom: 1rem;
+}
+
+.footer-logo {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px;
+    color: #f80;
+    text-shadow: 2px 2px 0 #400, 0 0 10px rgba(255, 136, 0, 0.5);
+    letter-spacing: 2px;
+}
+
+.footer-tagline {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 12px;
+    color: #666;
+    letter-spacing: 1px;
+}
+
+.footer-links {
+    margin: 1.25rem 0;
+}
+
+.footer-links a {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    color: #0ff;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+}
+
+.footer-links a:hover {
+    color: #fff;
+    text-shadow: 0 0 8px #0ff;
+}
+
+.footer-sep {
+    color: #333;
+    margin: 0 1rem;
+}
+
+.footer-deco {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #222;
+}
+
+.deco-char {
+    color: #333;
+    font-size: 14px;
+    margin: 0 2px;
+    animation: flicker 3s infinite;
+}
+
+.deco-char:nth-child(1) { color: #222; animation-delay: 0s; }
+.deco-char:nth-child(2) { color: #333; animation-delay: 0.5s; }
+.deco-char:nth-child(3) { color: #444; animation-delay: 1s; }
+.deco-char:nth-child(4) { color: #555; animation-delay: 1.5s; }
+.deco-char:nth-child(6) { color: #555; animation-delay: 1.5s; }
+.deco-char:nth-child(7) { color: #444; animation-delay: 1s; }
+.deco-char:nth-child(8) { color: #333; animation-delay: 0.5s; }
+.deco-char:nth-child(9) { color: #222; animation-delay: 0s; }
+
+.deco-text {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    color: #0a0;
+    margin: 0 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-shadow: 0 0 5px rgba(0, 170, 0, 0.5);
+}
+
+@keyframes flicker {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
 }

@@ -177,6 +177,14 @@ def init_master_db():
     with open(MASTER_SCHEMA_PATH) as f:
         conn.executescript(f.read())
 
+    # Migration: add has_plus column if it doesn't exist
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(worlds)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if 'has_plus' not in columns:
+        cursor.execute("ALTER TABLE worlds ADD COLUMN has_plus INTEGER DEFAULT 0")
+        conn.commit()
+
     return conn
 
 

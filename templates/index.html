@@ -171,14 +171,13 @@ function deleteWorld(worldId, worldName) {
 
     // Handle form submission - show loading state
     uploadForm.addEventListener('submit', function(e) {
-        uploadBtn.disabled = true;
-        uploadBtn.innerHTML = '<span class="loading-spinner"></span> Importing...';
-        uploadBtn.classList.add('loading');
-        uploadArea.classList.add('loading');
-
-        // Disable file inputs
-        legendsInput.disabled = true;
-        plusInput.disabled = true;
+        // Show loading state after a brief delay to allow form submission
+        setTimeout(function() {
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<span class="loading-spinner"></span> Importing...';
+            uploadBtn.classList.add('loading');
+            uploadArea.classList.add('loading');
+        }, 100);
     });
 })();
 </script>
@@ -188,9 +187,16 @@ function deleteWorld(worldId, worldName) {
     <h3>Statistics</h3>
     <div class="stats-grid">
         {% for label, count in stats.items() %}
-        <div class="stat-card">
+        {% set needs_plus = label in ['Entities', 'Written Works'] %}
+        <div class="stat-card{% if needs_plus and current_world and not current_world.has_plus %} stat-disabled{% endif %}"
+             {% if needs_plus and current_world and not current_world.has_plus %}title="Requires DFHack legends_plus.xml export"{% endif %}>
             <div class="stat-value">{{ "{:,}".format(count) }}</div>
-            <div class="stat-label">{{ label }}</div>
+            <div class="stat-label">
+                {{ label }}
+                {% if needs_plus and current_world and not current_world.has_plus %}
+                <span class="stat-hint">DFHack</span>
+                {% endif %}
+            </div>
         </div>
         {% endfor %}
     </div>

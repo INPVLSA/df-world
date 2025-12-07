@@ -245,11 +245,14 @@ def get_event_type_info(event_type):
     icon = '·'
     label = None
 
-    # Check direct mapping
-    if event_type in EVENT_TYPE_DATA:
-        icon, label = EVENT_TYPE_DATA[event_type]
+    # Normalize: convert spaces to underscores for lookup
+    normalized = event_type.replace(' ', '_')
 
-    # Default: replace underscores and title case
+    # Check direct mapping (with normalized key)
+    if normalized in EVENT_TYPE_DATA:
+        icon, label = EVENT_TYPE_DATA[normalized]
+
+    # Default: title case (use original with spaces replaced)
     if label is None:
         label = event_type.replace('_', ' ').title()
 
@@ -391,6 +394,13 @@ def get_master_db():
         # Initialize schema if needed
         with open(MASTER_SCHEMA_PATH) as f:
             g.master_db.executescript(f.read())
+        # Migration: add has_plus column if it doesn't exist
+        cursor = g.master_db.cursor()
+        cursor.execute("PRAGMA table_info(worlds)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if 'has_plus' not in columns:
+            cursor.execute("ALTER TABLE worlds ADD COLUMN has_plus INTEGER DEFAULT 0")
+            g.master_db.commit()
     return g.master_db
 
 
@@ -887,6 +897,9 @@ def sites():
     # Get unique types for filter
     types = db.execute("SELECT DISTINCT type FROM sites WHERE type IS NOT NULL ORDER BY type").fetchall()
 
+    current_world = get_current_world()
+    has_plus = current_world and current_world.get('has_plus')
+
     return render_template('sites.html',
                          sites=sites_data,
                          page=page,
@@ -897,7 +910,8 @@ def sites():
                          type_filter=type_filter,
                          types=types,
                          sort=sort_col,
-                         dir=sort_dir)
+                         dir=sort_dir,
+                         has_plus=has_plus)
 
 
 @app.route('/sites/<int:site_id>/structures')

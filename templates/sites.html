@@ -4,7 +4,7 @@
 {% block title %}Sites - DF-World{% endblock %}
 
 {% block content %}
-<h1>Sites & structures</h1>
+<h1>Sites <span class="title-suffix{% if not has_plus %} disabled{% endif %}"{% if not has_plus %} title="Requires DFHack legends_plus.xml export"{% endif %}>&amp; Structures</span></h1>
 
 <div class="filters">
     <input type="text" id="search-input" placeholder="Search by name..." value="{{ search }}">
@@ -27,13 +27,13 @@
             <th class="sortable{% if sort == 'name' %} sorted {{ dir }}{% endif %}" data-sort="name">Name</th>
             <th class="sortable{% if sort == 'type' %} sorted {{ dir }}{% endif %}" data-sort="type">Type</th>
             <th class="sortable{% if sort == 'coords' %} sorted {{ dir }}{% endif %}" data-sort="coords">Coords</th>
-            <th>Civilization</th>
+            <th class="{% if not has_plus %}col-disabled{% endif %}"{% if not has_plus %} title="Requires DFHack legends_plus.xml export"{% endif %}>Civilization</th>
         </tr>
     </thead>
     <tbody id="sites-tbody">
         {% for site in sites %}
         <tr class="site-row" data-site-id="{{ site.id }}" data-structure-count="{{ site.structure_count or 0 }}">
-            <td class="expand-toggle"><span class="expand-icon{% if not site.structure_count %} no-structures{% endif %}">+</span></td>
+            <td class="expand-toggle"><span class="expand-icon{% if not has_plus %} no-plus{% elif not site.structure_count %} no-structures{% endif %}">+</span></td>
             <td>{{ site.id }}</td>
             <td>{{ site.name|title if site.name else '(unnamed)' }}</td>
             <td class="type-cell">{% set ti = get_site_type_info(site.type) %}{% if ti.img %}<img src="{{ ti.img }}" class="type-icon" alt="">{% else %}<span class="type-icon-text">{{ ti.icon }}</span>{% endif %} {{ ti.label }}</td>
@@ -65,6 +65,7 @@
     var currentSort = '{{ sort }}';
     var currentDir = '{{ dir }}';
     var expandedSites = {};
+    var hasPlus = {{ 'true' if has_plus else 'false' }};
 
     function formatNumber(n) {
         return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -103,6 +104,12 @@
         } else {
             icon.textContent = '-';
             siteRow.classList.add('expanded');
+
+            // Show DFHack required message if no plus data
+            if (!hasPlus) {
+                siteRow.insertAdjacentHTML('afterend', '<tr class="structures-row"><td colspan="6" class="structures-cell"><div class="structures-content structures-missing"><span class="missing-icon">!</span> Structure data requires DFHack <code>legends_plus.xml</code> export. <a href="/">Merge DFHack data</a> to enable this feature.</div></td></tr>');
+                return;
+            }
 
             // Always fetch fresh when there's a search to get match info
             siteRow.insertAdjacentHTML('afterend', '<tr class="structures-row"><td colspan="6" class="structures-cell"><div class="structures-content"><em>Loading...</em></div></td></tr>');
@@ -269,7 +276,8 @@
         var toggle = e.target.closest('.expand-toggle');
         if (toggle) {
             var siteRow = toggle.closest('.site-row');
-            if (siteRow && parseInt(siteRow.dataset.structureCount) > 0) {
+            // Allow expanding if has structures OR if no plus data (to show the message)
+            if (siteRow && (parseInt(siteRow.dataset.structureCount) > 0 || !hasPlus)) {
                 toggleStructures(siteRow);
             }
         }
