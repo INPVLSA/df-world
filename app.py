@@ -168,10 +168,12 @@ def get_race_info(race):
     label = None
     img = None
 
-    # Check for image icon (convention: static/icons/races/{RACE_CODE}.png)
-    icon_path = RACE_ICONS_DIR / f"{race}.png"
-    if icon_path.exists():
-        img = f'/static/icons/races/{race}.png'
+    # Check for image icon (convention: static/icons/races/{RACE_CODE}.png or .gif)
+    for ext in ['.png', '.gif']:
+        icon_path = RACE_ICONS_DIR / f"{race}{ext}"
+        if icon_path.exists():
+            img = f'/static/icons/races/{race}{ext}'
+            break
 
     # Check direct mapping
     if race in RACE_DATA:
@@ -268,6 +270,18 @@ def get_world_info():
     return None
 
 
+def get_current_year():
+    """Get the current year of the world."""
+    db = get_db()
+    if not db:
+        return None
+    try:
+        row = db.execute("SELECT MAX(MAX(birth_year), MAX(death_year)) as year FROM historical_figures WHERE death_year != -1").fetchone()
+        return row['year'] if row else None
+    except:
+        return None
+
+
 @app.route('/')
 def index():
     """Dashboard page."""
@@ -358,6 +372,9 @@ def figures():
 
     figures_data = db.execute(query, params).fetchall()
     total = db.execute(count_query, count_params).fetchone()[0]
+    total_pages = (total + per_page - 1) // per_page  # Ceiling division
+
+    current_year = get_current_year()
 
     # AJAX request - return JSON
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -368,12 +385,24 @@ def figures():
             fig['race_label'] = race_info['label']
             fig['race_icon'] = race_info['icon']
             fig['race_img'] = race_info['img']
+            # Calculate age
+            if fig.get('birth_year') is not None and current_year is not None:
+                if fig.get('death_year') == -1:  # Still alive
+                    fig['age'] = current_year - fig['birth_year']
+                elif fig.get('death_year') is not None:
+                    fig['age'] = fig['death_year'] - fig['birth_year']
+                else:
+                    fig['age'] = None
+            else:
+                fig['age'] = None
             figures_list.append(fig)
         return jsonify({
             'figures': figures_list,
             'total': total,
+            'total_pages': total_pages,
             'page': page,
-            'per_page': per_page
+            'per_page': per_page,
+            'current_year': current_year
         })
 
     # Get unique races for filter
@@ -383,10 +412,12 @@ def figures():
                          figures=figures_data,
                          page=page,
                          total=total,
+                         total_pages=total_pages,
                          per_page=per_page,
                          search=search,
                          race_filter=race_filter,
-                         races=races)
+                         races=races,
+                         current_year=current_year)
 
 
 @app.route('/sites')
@@ -413,16 +444,23 @@ def sites():
     query += " ORDER BY id LIMIT ? OFFSET ?"
     params.extend([per_page, offset])
 
-    sites = db.execute(query, params).fetchall()
-    total = db.execute("SELECT COUNT(*) FROM sites").fetchone()[0]
+    sites_data = db.execute(query, params).fetchall()
+    count_query = "SELECT COUNT(*) FROM sites"
+    count_params = []
+    if type_filter:
+        count_query += " WHERE type = ?"
+        count_params.append(type_filter)
+    total = db.execute(count_query, count_params).fetchone()[0]
+    total_pages = (total + per_page - 1) // per_page
 
     # Get unique types for filter
     types = db.execute("SELECT DISTINCT type FROM sites WHERE type IS NOT NULL ORDER BY type").fetchall()
 
     return render_template('sites.html',
-                         sites=sites,
+                         sites=sites_data,
                          page=page,
                          total=total,
+                         total_pages=total_pages,
                          per_page=per_page,
                          type_filter=type_filter,
                          types=types)
@@ -457,16 +495,26 @@ def events():
     query += " ORDER BY year DESC, id DESC LIMIT ? OFFSET ?"
     params.extend([per_page, offset])
 
-    events = db.execute(query, params).fetchall()
-    total = db.execute("SELECT COUNT(*) FROM historical_events").fetchone()[0]
+    events_data = db.execute(query, params).fetchall()
+    count_query = "SELECT COUNT(*) FROM historical_events WHERE 1=1"
+    count_params = []
+    if year_filter:
+        count_query += " AND year = ?"
+        count_params.append(year_filter)
+    if type_filter:
+        count_query += " AND type = ?"
+        count_params.append(type_filter)
+    total = db.execute(count_query, count_params).fetchone()[0]
+    total_pages = (total + per_page - 1) // per_page
 
     # Get unique types for filter
     types = db.execute("SELECT DISTINCT type FROM historical_events WHERE type IS NOT NULL ORDER BY type").fetchall()
 
     return render_template('events.html',
-                         events=events,
+                         events=events_data,
                          page=page,
                          total=total,
+                         total_pages=total_pages,
                          per_page=per_page,
                          year_filter=year_filter,
                          type_filter=type_filter,

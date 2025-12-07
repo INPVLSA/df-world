@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "base.html" import pagination with context %}
 
 {% block title %}Sites - DF-World{% endblock %}
 
@@ -40,15 +41,5 @@
     </tbody>
 </table>
 
-<div class="pagination">
-    {% if page > 1 %}
-    <a href="?page={{ page - 1 }}&type={{ type_filter }}">&larr; Previous</a>
-    {% endif %}
-
-    <span>Page {{ page }}</span>
-
-    {% if sites|length == per_page %}
-    <a href="?page={{ page + 1 }}&type={{ type_filter }}">Next &rarr;</a>
-    {% endif %}
-</div>
+{{ pagination(page, total_pages, '?type=' ~ type_filter) }}
 {% endblock %}

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "base.html" import pagination with context %}
 
 {% block title %}Historical Figures - DF-World{% endblock %}
 
@@ -26,6 +27,7 @@
             <th>Caste</th>
             <th>Born</th>
             <th>Died</th>
+            <th>Age</th>
         </tr>
     </thead>
     <tbody id="figures-tbody">
@@ -37,21 +39,14 @@
             <td>{{ fig.caste or '-' }}</td>
             <td>{{ fig.birth_year if fig.birth_year else '-' }}</td>
             <td>{% if fig.death_year == -1 %}<span class="alive">Alive</span>{% else %}{{ fig.death_year if fig.death_year else '-' }}{% endif %}</td>
+            <td>{% if fig.birth_year and current_year %}{% if fig.death_year == -1 %}{{ current_year - fig.birth_year }}{% elif fig.death_year %}{{ fig.death_year - fig.birth_year }}{% else %}-{% endif %}{% else %}-{% endif %}</td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
 
 <div class="pagination" id="pagination">
-    {% if page > 1 %}
-    <a href="#" data-page="{{ page - 1 }}" class="page-link">&larr; Previous</a>
-    {% endif %}
-
-    <span>Page <span id="current-page">{{ page }}</span></span>
-
-    {% if figures|length == per_page %}
-    <a href="#" data-page="{{ page + 1 }}" class="page-link">Next &rarr;</a>
-    {% endif %}
+    {{ pagination(page, total_pages, '?q=' ~ search ~ '&race=' ~ race_filter) }}
 </div>
 
 <script>
@@ -61,8 +56,7 @@
     var tbody = document.getElementById('figures-tbody');
     var showingCount = document.getElementById('showing-count');
     var totalCount = document.getElementById('total-count');
-    var pagination = document.getElementById('pagination');
-    var currentPageSpan = document.getElementById('current-page');
+    var paginationContainer = document.getElementById('pagination');
 
     var timeout = null;
     var currentPage = {{ page }};
@@ -70,6 +64,53 @@
 
     function formatNumber(n) {
         return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    function renderPagination(page, totalPages, baseUrl) {
+        var html = '<div class="pagination">';
+
+        // First and Previous
+        if (page > 1) {
+            html += '<a href="#" data-page="1" class="page-btn" title="First">&laquo;</a>';
+            html += '<a href="#" data-page="' + (page - 1) + '" class="page-btn" title="Previous">&lsaquo;</a>';
+        } else {
+            html += '<span class="page-btn disabled">&laquo;</span>';
+            html += '<span class="page-btn disabled">&lsaquo;</span>';
+        }
+
+        // Page numbers
+        var startPage = Math.max(page - 2, 1);
+        var endPage = Math.min(page + 2, totalPages);
+
+        if (startPage > 1) {
+            html += '<a href="#" data-page="1" class="page-num">1</a>';
+            if (startPage > 2) html += '<span class="page-ellipsis">...</span>';
+        }
+
+        for (var p = startPage; p <= endPage; p++) {
+            if (p === page) {
+                html += '<span class="page-num active">' + p + '</span>';
+            } else {
+                html += '<a href="#" data-page="' + p + '" class="page-num">' + p + '</a>';
+            }
+        }
+
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) html += '<span class="page-ellipsis">...</span>';
+            html += '<a href="#" data-page="' + totalPages + '" class="page-num">' + totalPages + '</a>';
+        }
+
+        // Next and Last
+        if (page < totalPages) {
+            html += '<a href="#" data-page="' + (page + 1) + '" class="page-btn" title="Next">&rsaquo;</a>';
+            html += '<a href="#" data-page="' + totalPages + '" class="page-btn" title="Last">&raquo;</a>';
+        } else {
+            html += '<span class="page-btn disabled">&rsaquo;</span>';
+            html += '<span class="page-btn disabled">&raquo;</span>';
+        }
+
+        html += '</div>';
+        return html;
     }
 
     function fetchData(page) {
@@ -98,6 +139,7 @@
                     '<td>' + (fig.caste || '-') + '</td>' +
                     '<td>' + (fig.birth_year != null ? fig.birth_year : '-') + '</td>' +
                     '<td>' + (fig.death_year === -1 ? '<span class="alive">Alive</span>' : (fig.death_year != null ? fig.death_year : '-')) + '</td>' +
+                    '<td>' + (fig.age != null ? fig.age : '-') + '</td>' +
                 '</tr>';
             });
             tbody.innerHTML = html;
@@ -105,18 +147,9 @@
             // Update counts
             showingCount.textContent = data.figures.length;
             totalCount.textContent = formatNumber(data.total);
-            currentPageSpan.textContent = data.page;
 
             // Update pagination
-            var paginationHtml = '';
-            if (data.page > 1) {
-                paginationHtml += '<a href="#" data-page="' + (data.page - 1) + '" class="page-link">&larr; Previous</a>';
-            }
-            paginationHtml += '<span>Page <span id="current-page">' + data.page + '</span></span>';
-            if (data.figures.length === data.per_page) {
-                paginationHtml += '<a href="#" data-page="' + (data.page + 1) + '" class="page-link">Next &rarr;</a>';
-            }
-            pagination.innerHTML = paginationHtml;
+            paginationContainer.innerHTML = renderPagination(data.page, data.total_pages, '');
         });
     }
 
@@ -131,10 +164,11 @@
         fetchData(1);
     });
 
-    pagination.addEventListener('click', function(e) {
-        if (e.target.classList.contains('page-link')) {
+    paginationContainer.addEventListener('click', function(e) {
+        var target = e.target.closest('[data-page]');
+        if (target) {
             e.preventDefault();
-            fetchData(parseInt(e.target.dataset.page));
+            fetchData(parseInt(target.dataset.page));
         }
     });
 })();

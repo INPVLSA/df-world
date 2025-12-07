@@ -1,5 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
+{% macro pagination(page, total_pages, base_url) %}
+<div class="pagination">
+    {# First and Previous #}
+    {% if page > 1 %}
+    <a href="{{ base_url }}&page=1" class="page-btn" title="First">&laquo;</a>
+    <a href="{{ base_url }}&page={{ page - 1 }}" class="page-btn" title="Previous">&lsaquo;</a>
+    {% else %}
+    <span class="page-btn disabled">&laquo;</span>
+    <span class="page-btn disabled">&lsaquo;</span>
+    {% endif %}
+
+    {# Page numbers #}
+    {% set start_page = [page - 2, 1]|max %}
+    {% set end_page = [page + 2, total_pages]|min %}
+
+    {% if start_page > 1 %}
+    <a href="{{ base_url }}&page=1" class="page-num">1</a>
+    {% if start_page > 2 %}<span class="page-ellipsis">...</span>{% endif %}
+    {% endif %}
+
+    {% for p in range(start_page, end_page + 1) %}
+    {% if p == page %}
+    <span class="page-num active">{{ p }}</span>
+    {% else %}
+    <a href="{{ base_url }}&page={{ p }}" class="page-num">{{ p }}</a>
+    {% endif %}
+    {% endfor %}
+
+    {% if end_page < total_pages %}
+    {% if end_page < total_pages - 1 %}<span class="page-ellipsis">...</span>{% endif %}
+    <a href="{{ base_url }}&page={{ total_pages }}" class="page-num">{{ total_pages }}</a>
+    {% endif %}
+
+    {# Next and Last #}
+    {% if page < total_pages %}
+    <a href="{{ base_url }}&page={{ page + 1 }}" class="page-btn" title="Next">&rsaquo;</a>
+    <a href="{{ base_url }}&page={{ total_pages }}" class="page-btn" title="Last">&raquo;</a>
+    {% else %}
+    <span class="page-btn disabled">&rsaquo;</span>
+    <span class="page-btn disabled">&raquo;</span>
+    {% endif %}
+</div>
+{% endmacro %}
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
