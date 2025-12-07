@@ -627,3 +627,197 @@ a:hover {
 .structure-item.structure-match .structure-name {
     color: #f80;
 }
+
+/* Upload area */
+.upload-area {
+    background: #0a0a0a;
+    border: 2px dashed #333;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.upload-area p {
+    margin: 0 0 1rem 0;
+    color: #888;
+}
+
+.upload-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.upload-label {
+    display: block;
+    background: #000;
+    border: 2px solid #333;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.upload-label:hover {
+    border-color: #0f0;
+}
+
+.upload-label input[type="file"] {
+    display: none;
+}
+
+.upload-name {
+    color: #666;
+    font-family: 'Courier New', monospace;
+}
+
+.upload-name.selected {
+    color: #0f0;
+}
+
+/* World Switcher */
+.world-switcher {
+    margin-top: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.world-switcher label {
+    color: #888;
+    font-size: 0.9rem;
+}
+
+.world-switcher select {
+    font-family: 'Courier New', monospace;
+    background: #000;
+    border: 2px solid #444;
+    color: #0f0;
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    font-size: 14px;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2300ff00' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 10px;
+    cursor: pointer;
+    min-width: 200px;
+}
+
+.world-switcher select:hover {
+    border-color: #0f0;
+}
+
+.world-switcher select:focus {
+    border-color: #0f0;
+    outline: none;
+    box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+}
+
+.btn-delete {
+    border-color: #800;
+    color: #f00;
+    padding: 0.5rem 0.75rem;
+}
+
+.btn-delete:hover {
+    background: #f00;
+    color: #000;
+    border-color: #f00;
+}
+
+/* Loading States */
+.loading-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    vertical-align: middle;
+    margin-right: 0.5rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.btn.loading {
+    cursor: wait;
+    opacity: 0.8;
+}
+
+.upload-area.loading {
+    position: relative;
+    pointer-events: none;
+}
+
+.upload-area.loading::after {
+    content: 'Processing XML files... This may take a few minutes for large worlds.';
+    display: block;
+    margin-top: 1rem;
+    color: #f80;
+    font-size: 0.9rem;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+.upload-area.loading .upload-label {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.upload-area.loading .upload-label:hover {
+    border-color: #333;
+}
+
+/* Status Badges */
+.world-status {
+    margin: 0.75rem 0;
+}
+
+.status-badge {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    padding: 0.4rem 0.75rem;
+    border: 2px solid;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.status-plus {
+    background: #020;
+    border-color: #0f0;
+    color: #0f0;
+}
+
+.status-basic {
+    background: #220;
+    border-color: #f80;
+    color: #f80;
+}
+
+/* Merge Section */
+.merge-section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #333;
+}
+
+.merge-area {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.merge-label {
+    flex: 1;
+    min-width: 200px;
+}

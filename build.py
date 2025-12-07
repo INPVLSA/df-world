@@ -9,24 +9,35 @@ import re
 import json
 import sqlite3
 import tempfile
+import hashlib
 from pathlib import Path
 from lxml import etree
 
 # Paths
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "world.db"
+WORLDS_DIR = DATA_DIR / "worlds"
+MASTER_DB_PATH = DATA_DIR / "master.db"
 SCHEMA_PATH = BASE_DIR / "schema.sql"
+MASTER_SCHEMA_PATH = BASE_DIR / "master_schema.sql"
 
 # XML files (user should place these in the base directory)
 LEGENDS_FILE = None
 LEGENDS_PLUS_FILE = None
 
 
-def find_xml_files():
-    """Find legends XML files in the base directory."""
+def find_xml_files(legends_path=None, plus_path=None):
+    """Find or set legends XML files. legends_plus is optional."""
     global LEGENDS_FILE, LEGENDS_PLUS_FILE
 
+    # If paths provided via arguments, use them
+    if legends_path:
+        LEGENDS_FILE = Path(legends_path)
+        if plus_path:
+            LEGENDS_PLUS_FILE = Path(plus_path)
+        return LEGENDS_FILE.exists()
+
+    # Otherwise, search in base directory
     for f in BASE_DIR.glob("*.xml"):
         name = f.name.lower()
         if "legends_plus" in name:
@@ -34,7 +45,8 @@ def find_xml_files():
         elif "legends" in name:
             LEGENDS_FILE = f
 
-    return LEGENDS_FILE is not None and LEGENDS_PLUS_FILE is not None
+    # Only legends.xml is required, legends_plus is optional
+    return LEGENDS_FILE is not None
 
 
 def sanitize_xml_file(filepath):
@@ -122,7 +134,7 @@ def stream_elements(filepath, tag, callback, report_every=10000):
 
 
 def get_world_info(filepath):
-    """Extract world name and altname from legends_plus XML."""
+    """Extract world name and altname from XML file."""
     name = altname = None
 
     context = etree.iterparse(filepath, events=('end',), tag=('name', 'altname'))
@@ -138,11 +150,81 @@ def get_world_info(filepath):
     return name, altname
 
 
-def init_db():
-    """Initialize database with schema."""
-    DATA_DIR.mkdir(exist_ok=True)
+def get_world_info_from_legends(filepath):
+    """Extract world name from legends.xml (no altname available)."""
+    name = None
 
-    conn = sqlite3.connect(DB_PATH)
+    context = etree.iterparse(filepath, events=('end',), tag='name')
+    for event, elem in context:
+        # First <name> in legends.xml is the world name
+        if name is None:
+            name = elem.text
+            break
+        elem.clear()
+
+    del context
+    return name, None
+
+
+def init_master_db():
+    """Initialize master database for tracking worlds."""
+    DATA_DIR.mkdir(exist_ok=True)
+    WORLDS_DIR.mkdir(exist_ok=True)
+
+    conn = sqlite3.connect(MASTER_DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    with open(MASTER_SCHEMA_PATH) as f:
+        conn.executescript(f.read())
+
+    return conn
+
+
+def generate_world_id(name):
+    """Generate a unique ID for a world based on name and timestamp."""
+    import time
+    raw = f"{name}_{time.time()}"
+    return hashlib.md5(raw.encode()).hexdigest()[:12]
+
+
+def register_world(name, altname, db_path, has_plus=False):
+    """Register a world in the master database and set it as current."""
+    conn = init_master_db()
+    cursor = conn.cursor()
+
+    world_id = generate_world_id(name)
+
+    # Unset any current world
+    cursor.execute("UPDATE worlds SET is_current = 0 WHERE is_current = 1")
+
+    # Insert new world as current
+    cursor.execute(
+        "INSERT INTO worlds (id, name, altname, db_path, is_current, has_plus) VALUES (?, ?, ?, ?, 1, ?)",
+        (world_id, name, altname, str(db_path), 1 if has_plus else 0)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return world_id
+
+
+def update_world_has_plus(world_id):
+    """Mark a world as having legends_plus data."""
+    conn = init_master_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE worlds SET has_plus = 1 WHERE id = ?", (world_id,))
+    conn.commit()
+    conn.close()
+
+
+def init_world_db(db_path):
+    """Initialize a world database with schema."""
+    # Ensure worlds directory exists
+    db_path = Path(db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
 
@@ -153,59 +235,54 @@ def init_db():
     return conn
 
 
-def clear_tables(conn):
-    """Clear all tables for fresh import."""
-    print("\nClearing existing data...")
-
-    tables = [
-        'world', 'regions', 'underground_regions', 'landmasses', 'mountain_peaks',
-        'sites', 'structures', 'site_properties', 'entities', 'entity_positions',
-        'entity_position_assignments', 'historical_figures', 'hf_entity_links',
-        'hf_site_links', 'hf_relationships', 'artifacts', 'historical_events',
-        'written_content', 'written_content_styles', 'written_content_references'
-    ]
-
-    conn.execute("PRAGMA foreign_keys = OFF")
-    for table in tables:
-        conn.execute(f"DELETE FROM {table}")
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.commit()
-
-
-def run_import():
+def run_import(legends_path=None, plus_path=None):
     """Main import function."""
     print("=" * 50)
     print("DF-World XML Import")
     print("=" * 50)
 
     # Find XML files
-    if not find_xml_files():
+    if not find_xml_files(legends_path, plus_path):
         print("\nERROR: Could not find XML files!")
-        print("Please place your legends XML files in:", BASE_DIR)
-        print("Expected: *legends.xml and *legends_plus.xml")
+        print("Please place your legends XML file in:", BASE_DIR)
+        print("Expected: *legends.xml (required)")
+        print("Optional: *legends_plus.xml (DFHack export for additional data)")
         return False
 
-    print(f"\nFound XML files:")
-    print(f"  Legends: {LEGENDS_FILE.name}")
-    print(f"  Legends+: {LEGENDS_PLUS_FILE.name}")
+    has_plus = LEGENDS_PLUS_FILE is not None
+
+    print(f"\nUsing XML files:")
+    print(f"  Legends: {LEGENDS_FILE}")
+    if has_plus:
+        print(f"  Legends+: {LEGENDS_PLUS_FILE}")
+    else:
+        print("  Legends+: Not provided (some features will be limited)")
 
     # Sanitize XML files
     print("\nSanitizing XML files...")
     legends_clean = sanitize_xml_file(LEGENDS_FILE)
-    legends_plus_clean = sanitize_xml_file(LEGENDS_PLUS_FILE)
+    legends_plus_clean = sanitize_xml_file(LEGENDS_PLUS_FILE) if has_plus else None
 
     try:
-        # Initialize database
-        print("\nInitializing database...")
-        conn = init_db()
-        clear_tables(conn)
+        # First, get world info to determine database name
+        print("\nReading world info...")
+        if has_plus:
+            name, altname = get_world_info(legends_plus_clean)
+        else:
+            name, altname = get_world_info_from_legends(legends_clean)
+        print(f"  World: {name}" + (f" ({altname})" if altname else ""))
+
+        # Generate world ID and database path
+        world_id = generate_world_id(name)
+        db_path = WORLDS_DIR / f"{world_id}.db"
+
+        # Initialize world database
+        print(f"\nInitializing database: {db_path.name}")
+        conn = init_world_db(db_path)
         cursor = conn.cursor()
 
-        # Import world info
-        print("\nImporting world info...")
-        name, altname = get_world_info(legends_plus_clean)
+        # Insert world info
         cursor.execute("INSERT INTO world (name, altname) VALUES (?, ?)", (name, altname))
-        print(f"  World: {name} ({altname})")
         conn.commit()
 
         # === LEGENDS.XML ===
@@ -256,98 +333,102 @@ def run_import():
         conn.commit()
         print(f"  Imported {count} artifacts.")
 
-        # === LEGENDS_PLUS.XML ===
-        print("\n--- Processing legends_plus.xml ---")
+        # === LEGENDS_PLUS.XML (optional) ===
+        if has_plus:
+            print("\n--- Processing legends_plus.xml ---")
 
-        # Landmasses
-        print("\nImporting landmasses...")
-        def import_landmass(data):
-            cursor.execute(
-                "INSERT INTO landmasses (id, name, coord_1, coord_2) VALUES (?, ?, ?, ?)",
-                (data.get('id'), data.get('name'), data.get('coord_1'), data.get('coord_2'))
-            )
-        count = stream_elements(legends_plus_clean, 'landmass', import_landmass)
-        conn.commit()
-        print(f"  Imported {count} landmasses.")
-
-        # Mountain peaks
-        print("\nImporting mountain peaks...")
-        def import_peak(data):
-            cursor.execute(
-                "INSERT INTO mountain_peaks (id, name, coords, height, is_volcano) VALUES (?, ?, ?, ?, ?)",
-                (data.get('id'), data.get('name'), data.get('coords'),
-                 data.get('height'), 1 if 'is_volcano' in data else 0)
-            )
-        count = stream_elements(legends_plus_clean, 'mountain_peak', import_peak)
-        conn.commit()
-        print(f"  Imported {count} mountain peaks.")
-
-        # Update sites + structures
-        print("\nUpdating sites and importing structures...")
-        structure_count = 0
-        def import_site_plus(data):
-            nonlocal structure_count
-            site_id = data.get('id')
-            if site_id:
+            # Landmasses
+            print("\nImporting landmasses...")
+            def import_landmass(data):
                 cursor.execute(
-                    "UPDATE sites SET civ_id = ?, cur_owner_id = ? WHERE id = ?",
-                    (data.get('civ_id'), data.get('cur_owner_id'), site_id)
+                    "INSERT INTO landmasses (id, name, coord_1, coord_2) VALUES (?, ?, ?, ?)",
+                    (data.get('id'), data.get('name'), data.get('coord_1'), data.get('coord_2'))
+                )
+            count = stream_elements(legends_plus_clean, 'landmass', import_landmass)
+            conn.commit()
+            print(f"  Imported {count} landmasses.")
+
+            # Mountain peaks
+            print("\nImporting mountain peaks...")
+            def import_peak(data):
+                cursor.execute(
+                    "INSERT INTO mountain_peaks (id, name, coords, height, is_volcano) VALUES (?, ?, ?, ?, ?)",
+                    (data.get('id'), data.get('name'), data.get('coords'),
+                     data.get('height'), 1 if 'is_volcano' in data else 0)
+                )
+            count = stream_elements(legends_plus_clean, 'mountain_peak', import_peak)
+            conn.commit()
+            print(f"  Imported {count} mountain peaks.")
+
+            # Update sites + structures
+            print("\nUpdating sites and importing structures...")
+            structure_count = 0
+            def import_site_plus(data):
+                nonlocal structure_count
+                site_id = data.get('id')
+                if site_id:
+                    cursor.execute(
+                        "UPDATE sites SET civ_id = ?, cur_owner_id = ? WHERE id = ?",
+                        (data.get('civ_id'), data.get('cur_owner_id'), site_id)
+                    )
+
+                    # Structures
+                    structures = data.get('structures', {})
+                    if isinstance(structures, dict):
+                        struct_list = structures.get('structure', [])
+                        if isinstance(struct_list, dict):
+                            struct_list = [struct_list]
+                        for struct in struct_list:
+                            if isinstance(struct, dict):
+                                cursor.execute(
+                                    "INSERT INTO structures (local_id, site_id, name, name2, type) VALUES (?, ?, ?, ?, ?)",
+                                    (struct.get('id'), site_id, struct.get('name'), struct.get('name2'), struct.get('type'))
+                                )
+                                structure_count += 1
+            count = stream_elements(legends_plus_clean, 'site', import_site_plus)
+            conn.commit()
+            print(f"  Updated {count} sites, imported {structure_count} structures.")
+
+            # Entities
+            print("\nImporting entities...")
+            pos_count = assign_count = 0
+            def import_entity(data):
+                nonlocal pos_count, assign_count
+                entity_id = data.get('id')
+                cursor.execute(
+                    "INSERT OR REPLACE INTO entities (id, name, race, type) VALUES (?, ?, ?, ?)",
+                    (entity_id, data.get('name'), data.get('race'), data.get('type'))
                 )
 
-                # Structures
-                structures = data.get('structures', {})
-                if isinstance(structures, dict):
-                    struct_list = structures.get('structure', [])
-                    if isinstance(struct_list, dict):
-                        struct_list = [struct_list]
-                    for struct in struct_list:
-                        if isinstance(struct, dict):
-                            cursor.execute(
-                                "INSERT INTO structures (local_id, site_id, name, name2, type) VALUES (?, ?, ?, ?, ?)",
-                                (struct.get('id'), site_id, struct.get('name'), struct.get('name2'), struct.get('type'))
-                            )
-                            structure_count += 1
-        count = stream_elements(legends_plus_clean, 'site', import_site_plus)
-        conn.commit()
-        print(f"  Updated {count} sites, imported {structure_count} structures.")
+                # Positions
+                positions = data.get('entity_position', [])
+                if isinstance(positions, dict):
+                    positions = [positions]
+                for pos in positions:
+                    if isinstance(pos, dict):
+                        cursor.execute(
+                            "INSERT INTO entity_positions (entity_id, position_id, name) VALUES (?, ?, ?)",
+                            (entity_id, pos.get('id'), pos.get('name'))
+                        )
+                        pos_count += 1
 
-        # Entities
-        print("\nImporting entities...")
-        pos_count = assign_count = 0
-        def import_entity(data):
-            nonlocal pos_count, assign_count
-            entity_id = data.get('id')
-            cursor.execute(
-                "INSERT OR REPLACE INTO entities (id, name, race, type) VALUES (?, ?, ?, ?)",
-                (entity_id, data.get('name'), data.get('race'), data.get('type'))
-            )
-
-            # Positions
-            positions = data.get('entity_position', [])
-            if isinstance(positions, dict):
-                positions = [positions]
-            for pos in positions:
-                if isinstance(pos, dict):
-                    cursor.execute(
-                        "INSERT INTO entity_positions (entity_id, position_id, name) VALUES (?, ?, ?)",
-                        (entity_id, pos.get('id'), pos.get('name'))
-                    )
-                    pos_count += 1
-
-            # Assignments
-            assignments = data.get('entity_position_assignment', [])
-            if isinstance(assignments, dict):
-                assignments = [assignments]
-            for assign in assignments:
-                if isinstance(assign, dict):
-                    cursor.execute(
-                        "INSERT INTO entity_position_assignments (entity_id, position_id, histfig_id) VALUES (?, ?, ?)",
-                        (entity_id, assign.get('position_id'), assign.get('histfig'))
-                    )
-                    assign_count += 1
-        count = stream_elements(legends_plus_clean, 'entity', import_entity)
-        conn.commit()
-        print(f"  Imported {count} entities, {pos_count} positions, {assign_count} assignments.")
+                # Assignments
+                assignments = data.get('entity_position_assignment', [])
+                if isinstance(assignments, dict):
+                    assignments = [assignments]
+                for assign in assignments:
+                    if isinstance(assign, dict):
+                        cursor.execute(
+                            "INSERT INTO entity_position_assignments (entity_id, position_id, histfig_id) VALUES (?, ?, ?)",
+                            (entity_id, assign.get('position_id'), assign.get('histfig'))
+                        )
+                        assign_count += 1
+            count = stream_elements(legends_plus_clean, 'entity', import_entity)
+            conn.commit()
+            print(f"  Imported {count} entities, {pos_count} positions, {assign_count} assignments.")
+        else:
+            print("\n--- Skipping legends_plus.xml data (file not found) ---")
+            print("  Skipped: landmasses, mountain peaks, structures, entities")
 
         # Historical figures (from legends.xml which has names)
         print("\nImporting historical figures from legends.xml...")
@@ -388,39 +469,301 @@ def run_import():
         conn.commit()
         print(f"  Imported {count} historical figures, {entity_link_count} entity links, {site_link_count} site links.")
 
+        # Relationships (legends_plus only)
+        if has_plus:
+            print("\nImporting relationships...")
+            def import_rel(data):
+                cursor.execute(
+                    "INSERT INTO hf_relationships (source_hf, target_hf, relationship, year) VALUES (?, ?, ?, ?)",
+                    (data.get('source_hf'), data.get('target_hf'), data.get('relationship'), data.get('year'))
+                )
+            count = stream_elements(legends_plus_clean, 'historical_event_relationship', import_rel)
+            conn.commit()
+            print(f"  Imported {count} relationships.")
+
+        # Historical events
+        print("\nImporting historical events...")
+        if has_plus:
+            # First get years from legends.xml (legends_plus doesn't have them)
+            event_years = {}
+            def collect_years(data):
+                event_id = data.get('id')
+                year = data.get('year')
+                if event_id is not None and year is not None:
+                    event_years[int(event_id)] = int(year)
+            stream_elements(legends_clean, 'historical_event', collect_years)
+            print(f"  Collected years for {len(event_years)} events from legends.xml")
+
+            # Now import full event data from legends_plus.xml with years
+            known_fields = {'id', 'year', 'type', 'site_id', 'site', 'hfid', 'civ_id', 'civ',
+                           'state', 'reason', 'slayer_hfid', 'slayer_hf', 'death_cause',
+                           'artifact_id', 'entity_id', 'structure_id'}
+            def import_event_plus(data):
+                event_id = data.get('id')
+                year = event_years.get(int(event_id)) if event_id is not None else None
+                extra = {k: v for k, v in data.items() if k not in known_fields}
+                cursor.execute(
+                    """INSERT INTO historical_events
+                       (id, year, type, site_id, hfid, civ_id, state, reason, slayer_hfid,
+                        death_cause, artifact_id, entity_id, structure_id, extra_data)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (event_id, year, data.get('type'),
+                     data.get('site_id') or data.get('site'), data.get('hfid'),
+                     data.get('civ_id') or data.get('civ'), data.get('state'), data.get('reason'),
+                     data.get('slayer_hfid') or data.get('slayer_hf'), data.get('death_cause'),
+                     data.get('artifact_id'), data.get('entity_id'), data.get('structure_id'),
+                     json.dumps(extra) if extra else None)
+                )
+            count = stream_elements(legends_plus_clean, 'historical_event', import_event_plus)
+        else:
+            # Import events from legends.xml only (less detailed but has year)
+            def import_event_basic(data):
+                # Extract simple values, handling cases where field might be a dict/list
+                hfid = data.get('hfid')
+                if isinstance(hfid, (dict, list)):
+                    hfid = None  # Complex structure, skip
+                site_id = data.get('site_id')
+                if isinstance(site_id, (dict, list)):
+                    site_id = None
+                cursor.execute(
+                    """INSERT INTO historical_events
+                       (id, year, type, site_id, hfid)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (data.get('id'), data.get('year'), data.get('type'),
+                     site_id, hfid)
+                )
+            count = stream_elements(legends_clean, 'historical_event', import_event_basic)
+        conn.commit()
+        print(f"  Imported {count} historical events.")
+
+        # Written content (legends_plus only)
+        if has_plus:
+            print("\nImporting written content...")
+            style_count = ref_count = 0
+            def import_content(data):
+                nonlocal style_count, ref_count
+                content_id = data.get('id')
+                cursor.execute(
+                    "INSERT INTO written_content (id, title, type, author_hfid, page_start, page_end) VALUES (?, ?, ?, ?, ?, ?)",
+                    (content_id, data.get('title'), data.get('type'), data.get('author'),
+                     data.get('page_start'), data.get('page_end'))
+                )
+
+                # Styles
+                styles = data.get('style', [])
+                if isinstance(styles, str):
+                    styles = [styles]
+                for style in styles:
+                    cursor.execute(
+                        "INSERT INTO written_content_styles (written_content_id, style) VALUES (?, ?)",
+                        (content_id, style)
+                    )
+                    style_count += 1
+
+                # References
+                refs = data.get('reference', [])
+                if isinstance(refs, dict):
+                    refs = [refs]
+                for ref in refs:
+                    if isinstance(ref, dict):
+                        cursor.execute(
+                            "INSERT INTO written_content_references (written_content_id, ref_type, ref_id) VALUES (?, ?, ?)",
+                            (content_id, ref.get('type'), ref.get('id'))
+                        )
+                        ref_count += 1
+            count = stream_elements(legends_plus_clean, 'written_content', import_content)
+            conn.commit()
+            print(f"  Imported {count} written content, {style_count} styles, {ref_count} references.")
+
+        conn.close()
+
+        # Register world in master database
+        print("\nRegistering world...")
+        register_world(name, altname, db_path, has_plus=has_plus)
+        print(f"  World ID: {world_id}")
+        print(f"  Has legends_plus: {'Yes' if has_plus else 'No'}")
+
+        print("\n" + "=" * 50)
+        print("Import complete!")
+        print(f"World '{name}' is now active.")
+        print("=" * 50)
+        return True
+
+    finally:
+        # Cleanup temp files
+        os.unlink(legends_clean)
+        if legends_plus_clean:
+            os.unlink(legends_plus_clean)
+
+
+def run_merge_plus(world_id, db_path, plus_path):
+    """Merge legends_plus.xml data into an existing world database."""
+    print("=" * 50)
+    print("DF-World Legends Plus Merge")
+    print("=" * 50)
+
+    plus_file = Path(plus_path)
+    if not plus_file.exists():
+        print(f"\nERROR: File not found: {plus_path}")
+        return False
+
+    print(f"\nMerging into world: {world_id}")
+    print(f"  Database: {db_path}")
+    print(f"  Legends+: {plus_file}")
+
+    # Sanitize XML file
+    print("\nSanitizing XML file...")
+    legends_plus_clean = sanitize_xml_file(plus_file)
+
+    try:
+        # Connect to existing world database
+        conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA foreign_keys = ON")
+        cursor = conn.cursor()
+
+        # Get world info from legends_plus
+        print("\nReading world info...")
+        name, altname = get_world_info(legends_plus_clean)
+        print(f"  World: {name}" + (f" ({altname})" if altname else ""))
+
+        # Update world altname if we got one
+        if altname:
+            cursor.execute("UPDATE world SET altname = ? WHERE altname IS NULL", (altname,))
+            conn.commit()
+
+        print("\n--- Processing legends_plus.xml ---")
+
+        # Landmasses
+        print("\nImporting landmasses...")
+        def import_landmass(data):
+            cursor.execute(
+                "INSERT OR REPLACE INTO landmasses (id, name, coord_1, coord_2) VALUES (?, ?, ?, ?)",
+                (data.get('id'), data.get('name'), data.get('coord_1'), data.get('coord_2'))
+            )
+        count = stream_elements(legends_plus_clean, 'landmass', import_landmass)
+        conn.commit()
+        print(f"  Imported {count} landmasses.")
+
+        # Mountain peaks
+        print("\nImporting mountain peaks...")
+        def import_peak(data):
+            cursor.execute(
+                "INSERT OR REPLACE INTO mountain_peaks (id, name, coords, height, is_volcano) VALUES (?, ?, ?, ?, ?)",
+                (data.get('id'), data.get('name'), data.get('coords'),
+                 data.get('height'), 1 if 'is_volcano' in data else 0)
+            )
+        count = stream_elements(legends_plus_clean, 'mountain_peak', import_peak)
+        conn.commit()
+        print(f"  Imported {count} mountain peaks.")
+
+        # Update sites + structures
+        print("\nUpdating sites and importing structures...")
+        structure_count = 0
+        def import_site_plus(data):
+            nonlocal structure_count
+            site_id = data.get('id')
+            if site_id:
+                cursor.execute(
+                    "UPDATE sites SET civ_id = ?, cur_owner_id = ? WHERE id = ?",
+                    (data.get('civ_id'), data.get('cur_owner_id'), site_id)
+                )
+
+                # Structures
+                structures = data.get('structures', {})
+                if isinstance(structures, dict):
+                    struct_list = structures.get('structure', [])
+                    if isinstance(struct_list, dict):
+                        struct_list = [struct_list]
+                    for struct in struct_list:
+                        if isinstance(struct, dict):
+                            cursor.execute(
+                                "INSERT OR REPLACE INTO structures (local_id, site_id, name, name2, type) VALUES (?, ?, ?, ?, ?)",
+                                (struct.get('id'), site_id, struct.get('name'), struct.get('name2'), struct.get('type'))
+                            )
+                            structure_count += 1
+        count = stream_elements(legends_plus_clean, 'site', import_site_plus)
+        conn.commit()
+        print(f"  Updated {count} sites, imported {structure_count} structures.")
+
+        # Entities
+        print("\nImporting entities...")
+        pos_count = assign_count = 0
+        def import_entity(data):
+            nonlocal pos_count, assign_count
+            entity_id = data.get('id')
+            cursor.execute(
+                "INSERT OR REPLACE INTO entities (id, name, race, type) VALUES (?, ?, ?, ?)",
+                (entity_id, data.get('name'), data.get('race'), data.get('type'))
+            )
+
+            # Positions
+            positions = data.get('entity_position', [])
+            if isinstance(positions, dict):
+                positions = [positions]
+            for pos in positions:
+                if isinstance(pos, dict):
+                    cursor.execute(
+                        "INSERT OR REPLACE INTO entity_positions (entity_id, position_id, name) VALUES (?, ?, ?)",
+                        (entity_id, pos.get('id'), pos.get('name'))
+                    )
+                    pos_count += 1
+
+            # Assignments
+            assignments = data.get('entity_position_assignment', [])
+            if isinstance(assignments, dict):
+                assignments = [assignments]
+            for assign in assignments:
+                if isinstance(assign, dict):
+                    cursor.execute(
+                        "INSERT OR REPLACE INTO entity_position_assignments (entity_id, position_id, histfig_id) VALUES (?, ?, ?)",
+                        (entity_id, assign.get('position_id'), assign.get('histfig'))
+                    )
+                    assign_count += 1
+        count = stream_elements(legends_plus_clean, 'entity', import_entity)
+        conn.commit()
+        print(f"  Imported {count} entities, {pos_count} positions, {assign_count} assignments.")
+
         # Relationships
         print("\nImporting relationships...")
         def import_rel(data):
             cursor.execute(
-                "INSERT INTO hf_relationships (source_hf, target_hf, relationship, year) VALUES (?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO hf_relationships (source_hf, target_hf, relationship, year) VALUES (?, ?, ?, ?)",
                 (data.get('source_hf'), data.get('target_hf'), data.get('relationship'), data.get('year'))
             )
         count = stream_elements(legends_plus_clean, 'historical_event_relationship', import_rel)
         conn.commit()
         print(f"  Imported {count} relationships.")
 
-        # Historical events
-        print("\nImporting historical events...")
+        # Update historical events with more detailed data
+        print("\nUpdating historical events...")
+        # First get existing years from the database
+        event_years = {}
+        for row in cursor.execute("SELECT id, year FROM historical_events WHERE year IS NOT NULL"):
+            event_years[int(row[0])] = int(row[1])
+        print(f"  Found years for {len(event_years)} existing events")
+
         known_fields = {'id', 'year', 'type', 'site_id', 'site', 'hfid', 'civ_id', 'civ',
                        'state', 'reason', 'slayer_hfid', 'slayer_hf', 'death_cause',
                        'artifact_id', 'entity_id', 'structure_id'}
-        def import_event(data):
+        def import_event_plus(data):
+            event_id = data.get('id')
+            year = event_years.get(int(event_id)) if event_id is not None else None
             extra = {k: v for k, v in data.items() if k not in known_fields}
             cursor.execute(
-                """INSERT INTO historical_events
+                """INSERT OR REPLACE INTO historical_events
                    (id, year, type, site_id, hfid, civ_id, state, reason, slayer_hfid,
                     death_cause, artifact_id, entity_id, structure_id, extra_data)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (data.get('id'), data.get('year'), data.get('type'),
+                (event_id, year, data.get('type'),
                  data.get('site_id') or data.get('site'), data.get('hfid'),
                  data.get('civ_id') or data.get('civ'), data.get('state'), data.get('reason'),
                  data.get('slayer_hfid') or data.get('slayer_hf'), data.get('death_cause'),
                  data.get('artifact_id'), data.get('entity_id'), data.get('structure_id'),
                  json.dumps(extra) if extra else None)
             )
-        count = stream_elements(legends_plus_clean, 'historical_event', import_event)
+        count = stream_elements(legends_plus_clean, 'historical_event', import_event_plus)
         conn.commit()
-        print(f"  Imported {count} historical events.")
+        print(f"  Updated {count} historical events.")
 
         # Written content
         print("\nImporting written content...")
@@ -429,7 +772,7 @@ def run_import():
             nonlocal style_count, ref_count
             content_id = data.get('id')
             cursor.execute(
-                "INSERT INTO written_content (id, title, type, author_hfid, page_start, page_end) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO written_content (id, title, type, author_hfid, page_start, page_end) VALUES (?, ?, ?, ?, ?, ?)",
                 (content_id, data.get('title'), data.get('type'), data.get('author'),
                  data.get('page_start'), data.get('page_end'))
             )
@@ -440,7 +783,7 @@ def run_import():
                 styles = [styles]
             for style in styles:
                 cursor.execute(
-                    "INSERT INTO written_content_styles (written_content_id, style) VALUES (?, ?)",
+                    "INSERT OR REPLACE INTO written_content_styles (written_content_id, style) VALUES (?, ?)",
                     (content_id, style)
                 )
                 style_count += 1
@@ -452,7 +795,7 @@ def run_import():
             for ref in refs:
                 if isinstance(ref, dict):
                     cursor.execute(
-                        "INSERT INTO written_content_references (written_content_id, ref_type, ref_id) VALUES (?, ?, ?)",
+                        "INSERT OR REPLACE INTO written_content_references (written_content_id, ref_type, ref_id) VALUES (?, ?, ?)",
                         (content_id, ref.get('type'), ref.get('id'))
                     )
                     ref_count += 1
@@ -461,16 +804,46 @@ def run_import():
         print(f"  Imported {count} written content, {style_count} styles, {ref_count} references.")
 
         conn.close()
+
+        # Update master database
+        print("\nUpdating world status...")
+        update_world_has_plus(world_id)
+
+        # Also update altname in master db if we got one
+        if altname:
+            master_conn = init_master_db()
+            master_conn.execute("UPDATE worlds SET altname = ? WHERE id = ?", (altname, world_id))
+            master_conn.commit()
+            master_conn.close()
+
         print("\n" + "=" * 50)
-        print("Import complete!")
+        print("Merge complete!")
+        print(f"World '{world_id}' now has legends_plus data.")
         print("=" * 50)
         return True
 
     finally:
-        # Cleanup temp files
-        os.unlink(legends_clean)
+        # Cleanup temp file
         os.unlink(legends_plus_clean)
 
 
 if __name__ == '__main__':
-    run_import()
+    import sys
+
+    # Check for merge mode: --merge <world_id> <db_path> <plus_path>
+    if len(sys.argv) > 1 and sys.argv[1] == '--merge':
+        if len(sys.argv) < 5:
+            print("Usage: build.py --merge <world_id> <db_path> <plus_path>")
+            sys.exit(1)
+        world_id = sys.argv[2]
+        db_path = sys.argv[3]
+        plus_path = sys.argv[4]
+        success = run_merge_plus(world_id, db_path, plus_path)
+        sys.exit(0 if success else 1)
+
+    # Normal import mode
+    legends_path = sys.argv[1] if len(sys.argv) > 1 else None
+    plus_path = sys.argv[2] if len(sys.argv) > 2 else None
+
+    success = run_import(legends_path, plus_path)
+    sys.exit(0 if success else 1)

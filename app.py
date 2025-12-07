@@ -13,7 +13,8 @@ from flask import Flask, render_template, request, redirect, url_for, flash, g, 
 # Paths
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "world.db"
+MASTER_DB_PATH = DATA_DIR / "master.db"
+MASTER_SCHEMA_PATH = BASE_DIR / "master_schema.sql"
 
 # Race labels mapping (icon, label)
 RACE_DATA = {
@@ -381,11 +382,38 @@ app.jinja_env.globals['get_site_type_info'] = get_site_type_info
 app.jinja_env.globals['get_event_type_info'] = get_event_type_info
 
 
+def get_master_db():
+    """Get master database connection."""
+    if 'master_db' not in g:
+        DATA_DIR.mkdir(exist_ok=True)
+        g.master_db = sqlite3.connect(MASTER_DB_PATH)
+        g.master_db.row_factory = sqlite3.Row
+        # Initialize schema if needed
+        with open(MASTER_SCHEMA_PATH) as f:
+            g.master_db.executescript(f.read())
+    return g.master_db
+
+
+def get_current_world():
+    """Get the current active world from master database."""
+    db = get_master_db()
+    row = db.execute("SELECT * FROM worlds WHERE is_current = 1").fetchone()
+    return dict(row) if row else None
+
+
+def get_all_worlds():
+    """Get all available worlds from master database."""
+    db = get_master_db()
+    rows = db.execute("SELECT * FROM worlds ORDER BY created_at DESC").fetchall()
+    return [dict(row) for row in rows]
+
+
 def get_db():
-    """Get database connection for current request."""
+    """Get database connection for current world."""
     if 'db' not in g:
-        if DB_PATH.exists():
-            g.db = sqlite3.connect(DB_PATH)
+        world = get_current_world()
+        if world and Path(world['db_path']).exists():
+            g.db = sqlite3.connect(world['db_path'])
             g.db.row_factory = sqlite3.Row
         else:
             g.db = None
@@ -394,10 +422,13 @@ def get_db():
 
 @app.teardown_appcontext
 def close_db(error):
-    """Close database connection at end of request."""
+    """Close database connections at end of request."""
     db = g.pop('db', None)
     if db is not None:
         db.close()
+    master_db = g.pop('master_db', None)
+    if master_db is not None:
+        master_db.close()
 
 
 def get_stats():
@@ -457,26 +488,96 @@ def get_current_year():
 @app.route('/')
 def index():
     """Dashboard page."""
+    current_world = get_current_world()
+    all_worlds = get_all_worlds()
     world = get_world_info()
     stats = get_stats()
-
-    # Check for XML files
-    xml_files = list(BASE_DIR.glob("*.xml"))
-    has_xml = len(xml_files) >= 2
 
     return render_template('index.html',
                          world=world,
                          stats=stats,
-                         has_xml=has_xml,
-                         xml_files=[f.name for f in xml_files])
+                         current_world=current_world,
+                         all_worlds=all_worlds)
 
 
-@app.route('/build', methods=['POST'])
-def build():
-    """Run the import script."""
+@app.route('/switch-world/<world_id>', methods=['POST'])
+def switch_world(world_id):
+    """Switch to a different world."""
+    db = get_master_db()
+    cursor = db.cursor()
+
+    # Verify world exists
+    world = cursor.execute("SELECT * FROM worlds WHERE id = ?", (world_id,)).fetchone()
+    if not world:
+        flash('World not found', 'error')
+        return redirect(url_for('index'))
+
+    # Switch current world
+    cursor.execute("UPDATE worlds SET is_current = 0 WHERE is_current = 1")
+    cursor.execute("UPDATE worlds SET is_current = 1 WHERE id = ?", (world_id,))
+    db.commit()
+
+    flash(f"Switched to world: {world['name']}", 'success')
+    return redirect(url_for('index'))
+
+
+@app.route('/delete-world/<world_id>', methods=['POST'])
+def delete_world(world_id):
+    """Delete a world and its database."""
+    db = get_master_db()
+    cursor = db.cursor()
+
+    # Get world info
+    world = cursor.execute("SELECT * FROM worlds WHERE id = ?", (world_id,)).fetchone()
+    if not world:
+        flash('World not found', 'error')
+        return redirect(url_for('index'))
+
+    # Delete database file
+    db_path = Path(world['db_path'])
+    if db_path.exists():
+        db_path.unlink()
+
+    # Remove from master database
+    cursor.execute("DELETE FROM worlds WHERE id = ?", (world_id,))
+    db.commit()
+
+    flash(f"Deleted world: {world['name']}", 'success')
+    return redirect(url_for('index'))
+
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    """Handle file upload and run import."""
+    # Check for legends file (required)
+    if 'legends' not in request.files or request.files['legends'].filename == '':
+        flash('legends.xml file is required', 'error')
+        return redirect(url_for('index'))
+
+    legends_file = request.files['legends']
+    plus_file = request.files.get('legends_plus')
+
+    # Create uploads directory
+    upload_dir = DATA_DIR / 'uploads'
+    upload_dir.mkdir(exist_ok=True)
+
+    # Save uploaded files
+    legends_path = upload_dir / 'legends.xml'
+    legends_file.save(legends_path)
+
+    plus_path = None
+    if plus_file and plus_file.filename:
+        plus_path = upload_dir / 'legends_plus.xml'
+        plus_file.save(plus_path)
+
+    # Run import with file paths
     try:
+        cmd = [sys.executable, str(BASE_DIR / 'build.py'), str(legends_path)]
+        if plus_path:
+            cmd.append(str(plus_path))
+
         result = subprocess.run(
-            [sys.executable, str(BASE_DIR / 'build.py')],
+            cmd,
             capture_output=True,
             text=True,
             timeout=600  # 10 minute timeout
@@ -494,6 +595,77 @@ def build():
         flash('Import timed out after 10 minutes', 'error')
     except Exception as e:
         flash(f'Error running import: {str(e)}', 'error')
+    finally:
+        # Cleanup uploaded files
+        if legends_path.exists():
+            legends_path.unlink()
+        if plus_path and plus_path.exists():
+            plus_path.unlink()
+
+    return redirect(url_for('index'))
+
+
+@app.route('/merge-plus/<world_id>', methods=['POST'])
+def merge_plus(world_id):
+    """Merge legends_plus.xml into an existing world."""
+    db = get_master_db()
+    cursor = db.cursor()
+
+    # Get world info
+    world = cursor.execute("SELECT * FROM worlds WHERE id = ?", (world_id,)).fetchone()
+    if not world:
+        flash('World not found', 'error')
+        return redirect(url_for('index'))
+
+    if world['has_plus']:
+        flash('This world already has legends_plus data', 'error')
+        return redirect(url_for('index'))
+
+    # Check for legends_plus file
+    if 'legends_plus' not in request.files or request.files['legends_plus'].filename == '':
+        flash('legends_plus.xml file is required', 'error')
+        return redirect(url_for('index'))
+
+    plus_file = request.files['legends_plus']
+
+    # Create uploads directory
+    upload_dir = DATA_DIR / 'uploads'
+    upload_dir.mkdir(exist_ok=True)
+
+    # Save uploaded file
+    plus_path = upload_dir / 'legends_plus.xml'
+    plus_file.save(plus_path)
+
+    # Run merge with file path
+    try:
+        cmd = [
+            sys.executable, str(BASE_DIR / 'build.py'),
+            '--merge', world_id, world['db_path'], str(plus_path)
+        ]
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=600  # 10 minute timeout
+        )
+
+        if result.returncode == 0:
+            flash('Legends+ data merged successfully!', 'success')
+        else:
+            flash(f'Merge failed: {result.stderr}', 'error')
+
+        # Store output for display
+        app.config['LAST_BUILD_OUTPUT'] = result.stdout + result.stderr
+
+    except subprocess.TimeoutExpired:
+        flash('Merge timed out after 10 minutes', 'error')
+    except Exception as e:
+        flash(f'Error running merge: {str(e)}', 'error')
+    finally:
+        # Cleanup uploaded file
+        if plus_path.exists():
+            plus_path.unlink()
 
     return redirect(url_for('index'))
 
@@ -816,8 +988,8 @@ if __name__ == '__main__':
     print("=" * 50)
     print("DF-World Server")
     print("=" * 50)
-    print(f"\nDatabase: {DB_PATH}")
-    print(f"XML files should be in: {BASE_DIR}")
+    print(f"\nData directory: {DATA_DIR}")
+    print(f"Master database: {MASTER_DB_PATH}")
     print("\nStarting server at http://localhost:5001")
     print("Press Ctrl+C to stop\n")
     app.run(debug=True, port=5001, host='0.0.0.0')

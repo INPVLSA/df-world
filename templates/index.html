@@ -8,7 +8,52 @@
 {% if world %}
 <div class="world-info">
     <h2>{{ world.name }}</h2>
-    <p class="altname">{{ world.altname }}</p>
+    {% if world.altname %}<p class="altname">{{ world.altname }}</p>{% endif %}
+
+    {% if current_world %}
+    <p class="world-status">
+        {% if current_world.has_plus %}
+        <span class="status-badge status-plus">DFHack Extended</span>
+        {% else %}
+        <span class="status-badge status-basic">Basic Import</span>
+        {% endif %}
+    </p>
+    {% endif %}
+
+    {% if all_worlds|length > 1 %}
+    <div class="world-switcher">
+        <label for="world-select">Switch world:</label>
+        <select id="world-select" onchange="switchWorld(this.value)">
+            {% for w in all_worlds %}
+            <option value="{{ w.id }}" {% if current_world and w.id == current_world.id %}selected{% endif %}>
+                {{ w.name }}{% if w.altname %} ({{ w.altname }}){% endif %}{% if w.has_plus %} [+]{% endif %}
+            </option>
+            {% endfor %}
+        </select>
+        {% if current_world %}
+        <button type="button" class="btn btn-delete" onclick="deleteWorld('{{ current_world.id }}', '{{ current_world.name }}')" title="Delete this world">X</button>
+        {% endif %}
+    </div>
+    {% elif current_world %}
+    <div class="world-switcher">
+        <button type="button" class="btn btn-delete" onclick="deleteWorld('{{ current_world.id }}', '{{ current_world.name }}')" title="Delete this world">Delete World</button>
+    </div>
+    {% endif %}
+
+    {% if current_world and not current_world.has_plus %}
+    <div class="merge-section">
+        <p class="hint">This world was imported without DFHack data. You can add extended data now:</p>
+        <form method="post" action="{{ url_for('merge_plus', world_id=current_world.id) }}" enctype="multipart/form-data" id="merge-form">
+            <div class="merge-area">
+                <label class="upload-label merge-label">
+                    <span class="upload-name" id="merge-plus-name">Select legends_plus.xml</span>
+                    <input type="file" name="legends_plus" accept=".xml" id="merge-plus-input">
+                </label>
+                <button type="submit" class="btn" id="merge-btn" disabled>Merge DFHack Data</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
 </div>
 {% else %}
 <div class="world-info empty">
@@ -17,31 +62,126 @@
 </div>
 {% endif %}
 
+<script>
+function switchWorld(worldId) {
+    if (worldId) {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/switch-world/' + worldId;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function deleteWorld(worldId, worldName) {
+    if (confirm('Are you sure you want to delete "' + worldName + '"? This cannot be undone.')) {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/delete-world/' + worldId;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Merge form handling
+(function() {
+    var mergeInput = document.getElementById('merge-plus-input');
+    var mergeName = document.getElementById('merge-plus-name');
+    var mergeBtn = document.getElementById('merge-btn');
+    var mergeForm = document.getElementById('merge-form');
+
+    if (mergeInput && mergeName && mergeBtn) {
+        mergeInput.addEventListener('change', function() {
+            if (mergeInput.files.length > 0) {
+                mergeName.textContent = mergeInput.files[0].name;
+                mergeName.classList.add('selected');
+                mergeBtn.disabled = false;
+            } else {
+                mergeName.textContent = 'Select legends_plus.xml';
+                mergeName.classList.remove('selected');
+                mergeBtn.disabled = true;
+            }
+        });
+
+        mergeForm.addEventListener('submit', function() {
+            mergeBtn.disabled = true;
+            mergeBtn.innerHTML = '<span class="loading-spinner"></span> Merging...';
+            mergeBtn.classList.add('loading');
+        });
+    }
+})();
+</script>
+
 <div class="section">
     <h3>Import Data</h3>
 
-    {% if has_xml %}
-    <p>XML files found:</p>
-    <ul>
-        {% for f in xml_files %}
-        <li>{{ f }}</li>
-        {% endfor %}
-    </ul>
-    <form method="post" action="{{ url_for('build') }}">
-        <button type="submit" class="btn btn-primary">Run Import</button>
+    <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" id="upload-form">
+        <div class="upload-area" id="upload-area">
+            <p>Upload your legends XML files</p>
+            <div class="upload-inputs">
+                <label class="upload-label">
+                    <span class="upload-name" id="legends-name">legends.xml (required)</span>
+                    <input type="file" name="legends" accept=".xml" id="legends-input">
+                </label>
+                <label class="upload-label">
+                    <span class="upload-name" id="plus-name">legends_plus.xml (optional, DFHack)</span>
+                    <input type="file" name="legends_plus" accept=".xml" id="plus-input">
+                </label>
+            </div>
+            <button type="submit" class="btn btn-primary" id="upload-btn" disabled>Upload & Import</button>
+        </div>
     </form>
-    <p class="hint">This will clear existing data and import fresh from XML files.</p>
-    {% else %}
-    <div class="alert alert-warning">
-        <p>No XML files found!</p>
-        <p>Please place your Dwarf Fortress legends XML files in the application directory:</p>
-        <code>~/df-world/</code>
-        <p>Expected files: <code>*legends.xml</code> and <code>*legends_plus.xml</code></p>
-    </div>
-    {% endif %}
+    <p class="hint">This will clear existing data and import fresh from uploaded files.</p>
 
     <p><a href="{{ url_for('build_output') }}">View last import output</a></p>
 </div>
+
+<script>
+(function() {
+    var legendsInput = document.getElementById('legends-input');
+    var plusInput = document.getElementById('plus-input');
+    var legendsName = document.getElementById('legends-name');
+    var plusName = document.getElementById('plus-name');
+    var uploadBtn = document.getElementById('upload-btn');
+    var uploadForm = document.getElementById('upload-form');
+    var uploadArea = document.getElementById('upload-area');
+
+    function updateState() {
+        if (legendsInput.files.length > 0) {
+            legendsName.textContent = legendsInput.files[0].name;
+            legendsName.classList.add('selected');
+            uploadBtn.disabled = false;
+        } else {
+            legendsName.textContent = 'legends.xml (required)';
+            legendsName.classList.remove('selected');
+            uploadBtn.disabled = true;
+        }
+
+        if (plusInput.files.length > 0) {
+            plusName.textContent = plusInput.files[0].name;
+            plusName.classList.add('selected');
+        } else {
+            plusName.textContent = 'legends_plus.xml (optional, DFHack)';
+            plusName.classList.remove('selected');
+        }
+    }
+
+    legendsInput.addEventListener('change', updateState);
+    plusInput.addEventListener('change', updateState);
+
+    // Handle form submission - show loading state
+    uploadForm.addEventListener('submit', function(e) {
+        uploadBtn.disabled = true;
+        uploadBtn.innerHTML = '<span class="loading-spinner"></span> Importing...';
+        uploadBtn.classList.add('loading');
+        uploadArea.classList.add('loading');
+
+        // Disable file inputs
+        legendsInput.disabled = true;
+        plusInput.disabled = true;
+    });
+})();
+</script>
 
 {% if stats %}
 <div class="section">

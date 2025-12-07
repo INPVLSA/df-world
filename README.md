@@ -11,13 +11,19 @@ A web interface for exploring your Dwarf Fortress world history.
 
 ## Getting Started
 
-### 1. Export Your World Data (requires DFHack)
+### 1. Export Your World Data
 
+**Option A: With DFHack (recommended)**
 In Dwarf Fortress with [DFHack](https://dfhack.org/):
 1. Enter Legends mode
 2. Press the export button (DFHack adds this automatically)
 
-This creates both required XML files (`*-legends.xml` and `*-legends_plus.xml`).
+This creates `*-legends.xml` and `*-legends_plus.xml` with full data.
+
+**Option B: Vanilla DF**
+In Legends mode, export your world data to get `*-legends.xml`.
+
+Note: Without DFHack, some features are limited (no structures, entities, relationships, or written content).
 
 ### 2. Install & Run
 
