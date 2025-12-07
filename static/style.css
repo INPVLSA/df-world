@@ -21,6 +21,10 @@ nav {
     border-bottom: 2px solid #333;
     font-family: 'Press Start 2P', monospace;
     font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 2rem;
 }
 
 nav a {
@@ -34,6 +38,14 @@ nav a {
 nav a:hover {
     color: #fff;
     text-shadow: 0 0 8px #ff0;
+}
+
+.nav-icon {
+    height: 20px;
+    width: auto;
+    vertical-align: middle;
+    margin-right: 0.5rem;
+    image-rendering: pixelated;
 }
 
 main {
@@ -488,6 +500,27 @@ a:hover {
 }
 
 .race-icon-text {
+    display: inline-block;
+    width: 16px;
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    margin-right: 4px;
+}
+
+/* Site type icons in table */
+.type-cell {
+    white-space: nowrap;
+}
+
+.type-icon {
+    max-height: 24px;
+    width: auto;
+    vertical-align: middle;
+    margin-right: 4px;
+    image-rendering: pixelated;
+}
+
+.type-icon-text {
     display: inline-block;
     width: 16px;
     text-align: center;

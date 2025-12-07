@@ -47,15 +47,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}DF-World{% endblock %}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='ico.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <nav class="navbar">
         <div class="nav-brand">
-            <a href="{{ url_for('index') }}">DF-World</a>
+            <a href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='ico.png') }}" alt="" class="nav-icon">DF-World</a>
         </div>
         <div class="nav-links">
-            <a href="{{ url_for('index') }}">Dashboard</a>
             <a href="{{ url_for('figures') }}">Figures</a>
             <a href="{{ url_for('sites') }}">Sites</a>
             <a href="{{ url_for('events') }}">Events</a>

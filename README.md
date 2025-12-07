@@ -15,7 +15,7 @@ A web interface for exploring your Dwarf Fortress world history.
 
 In Dwarf Fortress with [DFHack](https://dfhack.org/):
 1. Enter Legends mode
-2. Run `exportlegends info` in the DFHack console
+2. Press the export button (DFHack adds this automatically)
 
 This creates both required XML files (`*-legends.xml` and `*-legends_plus.xml`).
 

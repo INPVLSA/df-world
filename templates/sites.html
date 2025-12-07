@@ -10,7 +10,7 @@
     <select name="type" onchange="this.form.submit()">
         <option value="">All Types</option>
         {% for t in types %}
-        <option value="{{ t.type }}" {% if type_filter == t.type %}selected{% endif %}>{{ t.type }}</option>
+        <option value="{{ t.type }}" {% if type_filter == t.type %}selected{% endif %}>{{ t.type|site_type_label }}</option>
         {% endfor %}
     </select>
     <a href="{{ url_for('sites') }}" class="btn btn-clear{% if not type_filter %} disabled{% endif %}">Clear</a>
@@ -21,10 +21,10 @@
 <table>
     <thead>
         <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Coords</th>
+            <th class="sortable{% if sort == 'id' %} sorted {{ dir }}{% endif %}" data-sort="id">ID</th>
+            <th class="sortable{% if sort == 'name' %} sorted {{ dir }}{% endif %}" data-sort="name">Name</th>
+            <th class="sortable{% if sort == 'type' %} sorted {{ dir }}{% endif %}" data-sort="type">Type</th>
+            <th class="sortable{% if sort == 'coords' %} sorted {{ dir }}{% endif %}" data-sort="coords">Coords</th>
             <th>Civ ID</th>
         </tr>
     </thead>
@@ -32,8 +32,8 @@
         {% for site in sites %}
         <tr>
             <td>{{ site.id }}</td>
-            <td>{{ site.name or '(unnamed)' }}</td>
-            <td>{{ site.type or '-' }}</td>
+            <td>{{ site.name|title if site.name else '(unnamed)' }}</td>
+            <td class="type-cell">{% set ti = get_site_type_info(site.type) %}{% if ti.img %}<img src="{{ ti.img }}" class="type-icon" alt="">{% else %}<span class="type-icon-text">{{ ti.icon }}</span>{% endif %} {{ ti.label }}</td>
             <td>{{ site.coords or '-' }}</td>
             <td>{{ site.civ_id if site.civ_id else '-' }}</td>
         </tr>
@@ -41,5 +41,29 @@
     </tbody>
 </table>
 
-{{ pagination(page, total_pages, '?type=' ~ type_filter) }}
+{{ pagination(page, total_pages, '?type=' ~ type_filter ~ '&sort=' ~ sort ~ '&dir=' ~ dir) }}
+
+<script>
+(function() {
+    var thead = document.querySelector('table thead');
+    var currentSort = '{{ sort }}';
+    var currentDir = '{{ dir }}';
+
+    thead.addEventListener('click', function(e) {
+        var th = e.target.closest('th.sortable');
+        if (th) {
+            var col = th.dataset.sort;
+            var newDir = 'asc';
+            if (col === currentSort) {
+                newDir = currentDir === 'asc' ? 'desc' : 'asc';
+            }
+            var params = new URLSearchParams(window.location.search);
+            params.set('sort', col);
+            params.set('dir', newDir);
+            params.set('page', '1');
+            window.location.search = params.toString();
+        }
+    });
+})();
+</script>
 {% endblock %}

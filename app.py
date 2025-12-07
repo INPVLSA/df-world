@@ -158,6 +158,72 @@ RACE_PATTERNS = {
 # Race icons directory
 RACE_ICONS_DIR = BASE_DIR / "static" / "icons" / "races"
 
+# Site type labels mapping (icon, label)
+SITE_TYPE_DATA = {
+    'camp': ('⌂', 'Camp'),
+    'castle': ('♜', 'Castle'),
+    'cave': ('○', 'Cave'),
+    'dark fortress': ('▓', 'Dark Fortress'),
+    'dark pits': ('▼', 'Dark Pits'),
+    'forest retreat': ('♣', 'Forest Retreat'),
+    'fort': ('⌂', 'Fort'),
+    'fortress': ('☼', 'Fortress'),
+    'hamlet': ('∩', 'Hamlet'),
+    'hillocks': ('▲', 'Hillocks'),
+    'labyrinth': ('▒', 'Labyrinth'),
+    'lair': ('◘', 'Lair'),
+    'monastery': ('†', 'Monastery'),
+    'mountain halls': ('▲', 'Mountain Halls'),
+    'mysterious dungeon': ('▒', 'Mysterious Dungeon'),
+    'mysterious lair': ('◘', 'Mysterious Lair'),
+    'mysterious palace': ('♔', 'Mysterious Palace'),
+    'shrine': ('†', 'Shrine'),
+    'tomb': ('☠', 'Tomb'),
+    'tower': ('♜', 'Tower'),
+    'town': ('⌂', 'Town'),
+    'vault': ('■', 'Vault'),
+}
+
+# Site icons directory
+SITE_ICONS_DIR = BASE_DIR / "static" / "icons" / "sites"
+
+
+def get_site_type_info(site_type):
+    """Get site type label, text icon, and image icon path."""
+    if not site_type:
+        return {'label': '-', 'icon': '·', 'img': None}
+
+    icon = '·'
+    label = None
+    img = None
+
+    # Check for image icon
+    for ext in ['.png', '.gif']:
+        icon_path = SITE_ICONS_DIR / f"{site_type.replace(' ', '_')}{ext}"
+        if icon_path.exists():
+            img = f'/static/icons/sites/{site_type.replace(" ", "_")}{ext}'
+            break
+
+    # Check direct mapping
+    if site_type in SITE_TYPE_DATA:
+        icon, label = SITE_TYPE_DATA[site_type]
+
+    # Default: title case
+    if label is None:
+        label = site_type.title()
+
+    return {'label': label, 'icon': icon, 'img': img}
+
+
+def format_site_type(site_type, with_icon=True):
+    """Convert site type to readable label with optional icon."""
+    info = get_site_type_info(site_type)
+    if info['label'] == '-':
+        return '-'
+    if with_icon:
+        return f"{info['icon']} {info['label']}"
+    return info['label']
+
 
 def get_race_info(race):
     """Get race label, text icon, and image icon path."""
@@ -206,7 +272,9 @@ app.secret_key = 'df-world-secret-key'
 
 # Register template filters
 app.jinja_env.filters['race_label'] = format_race
+app.jinja_env.filters['site_type_label'] = format_site_type
 app.jinja_env.globals['get_race_info'] = get_race_info
+app.jinja_env.globals['get_site_type_info'] = get_site_type_info
 
 
 def get_db():
@@ -455,6 +523,17 @@ def sites():
 
     type_filter = request.args.get('type', '')
 
+    # Sorting
+    sort_col = request.args.get('sort', 'name')
+    sort_dir = request.args.get('dir', 'asc')
+
+    # Validate sort column and direction
+    valid_columns = ['id', 'name', 'type', 'coords']
+    if sort_col not in valid_columns:
+        sort_col = 'name'
+    if sort_dir not in ['asc', 'desc']:
+        sort_dir = 'asc'
+
     query = "SELECT * FROM sites WHERE 1=1"
     params = []
 
@@ -462,7 +541,13 @@ def sites():
         query += " AND type = ?"
         params.append(type_filter)
 
-    query += " ORDER BY id LIMIT ? OFFSET ?"
+    # Handle NULL sorting (NULLs last for ASC, first for DESC)
+    if sort_dir == 'asc':
+        query += f" ORDER BY {sort_col} IS NULL, {sort_col} ASC"
+    else:
+        query += f" ORDER BY {sort_col} IS NOT NULL, {sort_col} DESC"
+
+    query += " LIMIT ? OFFSET ?"
     params.extend([per_page, offset])
 
     sites_data = db.execute(query, params).fetchall()
@@ -484,7 +569,9 @@ def sites():
                          total_pages=total_pages,
                          per_page=per_page,
                          type_filter=type_filter,
-                         types=types)
+                         types=types,
+                         sort=sort_col,
+                         dir=sort_dir)
 
 
 @app.route('/events')
