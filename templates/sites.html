@@ -27,7 +27,7 @@
             <th class="sortable{% if sort == 'name' %} sorted {{ dir }}{% endif %}" data-sort="name">Name</th>
             <th class="sortable{% if sort == 'type' %} sorted {{ dir }}{% endif %}" data-sort="type">Type</th>
             <th class="sortable{% if sort == 'coords' %} sorted {{ dir }}{% endif %}" data-sort="coords">Coords</th>
-            <th class="{% if not has_plus %}col-disabled{% endif %}"{% if not has_plus %} title="Requires DFHack legends_plus.xml export"{% endif %}>Civilization</th>
+            <th class="{% if not has_plus %}col-disabled{% endif %}">Civilization{% if not has_plus %}<span class="col-plus-badge" title="Requires DFHack legends_plus.xml">+</span>{% endif %}</th>
         </tr>
     </thead>
     <tbody id="sites-tbody">

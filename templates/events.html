@@ -29,6 +29,12 @@
             form.submit();
         }, 400);
     });
+
+    // Restore cursor position after page reload
+    if (yearInput.value) {
+        yearInput.focus();
+        yearInput.setSelectionRange(yearInput.value.length, yearInput.value.length);
+    }
 })();
 </script>
 

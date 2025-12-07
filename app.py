@@ -987,7 +987,10 @@ def figures():
     if sort_dir not in ['asc', 'desc']:
         sort_dir = 'asc'
 
-    query = "SELECT * FROM historical_figures WHERE 1=1"
+    query = """SELECT hf.*,
+               (SELECT COUNT(*) FROM hf_entity_links WHERE hfid = hf.id) +
+               (SELECT COUNT(*) FROM hf_site_links WHERE hfid = hf.id) as link_count
+               FROM historical_figures hf WHERE 1=1"""
     count_query = "SELECT COUNT(*) FROM historical_figures WHERE 1=1"
     params = []
     count_params = []
@@ -1006,9 +1009,9 @@ def figures():
 
     # Handle NULL sorting (NULLs last for ASC, first for DESC)
     if sort_dir == 'asc':
-        query += f" ORDER BY {sort_col} IS NULL, {sort_col} ASC"
+        query += f" ORDER BY hf.{sort_col} IS NULL, hf.{sort_col} ASC"
     else:
-        query += f" ORDER BY {sort_col} IS NOT NULL, {sort_col} DESC"
+        query += f" ORDER BY hf.{sort_col} IS NOT NULL, hf.{sort_col} DESC"
 
     query += " LIMIT ? OFFSET ?"
     params.extend([per_page, offset])
@@ -1053,6 +1056,10 @@ def figures():
     # Get unique races for filter
     races = db.execute("SELECT DISTINCT race FROM historical_figures WHERE race IS NOT NULL ORDER BY race").fetchall()
 
+    # Check if DFHack data is available
+    current_world = get_current_world()
+    has_plus = current_world and current_world.get('has_plus')
+
     return render_template('figures.html',
                          figures=figures_data,
                          page=page,
@@ -1064,7 +1071,53 @@ def figures():
                          races=races,
                          current_year=current_year,
                          sort=sort_col,
-                         dir=sort_dir)
+                         dir=sort_dir,
+                         has_plus=has_plus)
+
+
+@app.route('/figures/<int:figure_id>/affiliations')
+def figure_affiliations(figure_id):
+    """Get entity affiliations and site links for a specific historical figure."""
+    db = get_db()
+    if not db:
+        return jsonify({'error': 'Database not found'}), 404
+
+    # Entity affiliations
+    affiliations = db.execute("""
+        SELECT hel.*, e.name as entity_name, e.type as entity_type
+        FROM hf_entity_links hel
+        LEFT JOIN entities e ON hel.entity_id = e.id
+        WHERE hel.hfid = ?
+        ORDER BY hel.link_type, e.name
+    """, [figure_id]).fetchall()
+
+    affiliations_list = []
+    for row in affiliations:
+        aff = dict(row)
+        affiliations_list.append(aff)
+
+    # Site links
+    site_links = db.execute("""
+        SELECT hsl.*, s.name as site_name, s.type as site_type
+        FROM hf_site_links hsl
+        LEFT JOIN sites s ON hsl.site_id = s.id
+        WHERE hsl.hfid = ?
+        ORDER BY hsl.link_type, s.name
+    """, [figure_id]).fetchall()
+
+    site_links_list = []
+    for row in site_links:
+        sl = dict(row)
+        site_type_info = get_site_type_info(sl.get('site_type'))
+        sl['site_type_label'] = site_type_info['label']
+        sl['site_type_icon'] = site_type_info['icon']
+        sl['site_type_img'] = site_type_info['img']
+        site_links_list.append(sl)
+
+    return jsonify({
+        'affiliations': affiliations_list,
+        'site_links': site_links_list
+    })
 
 
 @app.route('/sites')
@@ -1341,6 +1394,89 @@ def events():
                          year_filter=year_filter,
                          type_filter=type_filter,
                          types=types)
+
+
+@app.route('/artifacts')
+def artifacts():
+    """List artifacts."""
+    db = get_db()
+    if not db:
+        flash('Database not found. Run import first.', 'error')
+        return redirect(url_for('index'))
+
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    offset = (page - 1) * per_page
+
+    search = request.args.get('q', '')
+    type_filter = request.args.get('type', '')
+
+    # Sorting
+    sort_col = request.args.get('sort', 'name')
+    sort_dir = request.args.get('dir', 'asc')
+
+    valid_columns = ['id', 'name', 'item_type', 'mat']
+    if sort_col not in valid_columns:
+        sort_col = 'name'
+    if sort_dir not in ['asc', 'desc']:
+        sort_dir = 'asc'
+
+    query = """SELECT a.*,
+               hf.name as creator_name,
+               s.name as site_name,
+               holder.name as holder_name
+               FROM artifacts a
+               LEFT JOIN historical_figures hf ON a.creator_hfid = hf.id
+               LEFT JOIN sites s ON a.site_id = s.id
+               LEFT JOIN historical_figures holder ON a.holder_hfid = holder.id
+               WHERE a.name IS NOT NULL"""
+    count_query = "SELECT COUNT(*) FROM artifacts WHERE name IS NOT NULL"
+    params = []
+    count_params = []
+
+    if search:
+        query += " AND a.name LIKE ?"
+        count_query += " AND name LIKE ?"
+        params.append(f'%{search}%')
+        count_params.append(f'%{search}%')
+
+    if type_filter:
+        query += " AND a.item_type = ?"
+        count_query += " AND item_type = ?"
+        params.append(type_filter)
+        count_params.append(type_filter)
+
+    # Handle NULL sorting
+    if sort_dir == 'asc':
+        query += f" ORDER BY a.{sort_col} IS NULL, a.{sort_col} ASC"
+    else:
+        query += f" ORDER BY a.{sort_col} IS NOT NULL, a.{sort_col} DESC"
+
+    query += " LIMIT ? OFFSET ?"
+    params.extend([per_page, offset])
+
+    artifacts_data = db.execute(query, params).fetchall()
+    total = db.execute(count_query, count_params).fetchone()[0]
+    total_pages = (total + per_page - 1) // per_page
+
+    # Get unique types for filter
+    types = db.execute("SELECT DISTINCT item_type FROM artifacts WHERE item_type IS NOT NULL ORDER BY item_type").fetchall()
+
+    current_world = get_current_world()
+    has_plus = current_world and current_world.get('has_plus')
+
+    return render_template('artifacts.html',
+                         artifacts=artifacts_data,
+                         page=page,
+                         total=total,
+                         total_pages=total_pages,
+                         per_page=per_page,
+                         search=search,
+                         type_filter=type_filter,
+                         types=types,
+                         sort=sort_col,
+                         dir=sort_dir,
+                         has_plus=has_plus)
 
 
 if __name__ == '__main__':
