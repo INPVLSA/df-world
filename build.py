@@ -134,33 +134,54 @@ def stream_elements(filepath, tag, callback, report_every=10000):
 
 
 def get_world_info(filepath):
-    """Extract world name and altname from XML file."""
-    name = altname = None
+    """Extract world name and altname from XML file.
 
-    context = etree.iterparse(filepath, events=('end',), tag=('name', 'altname'))
+    Looks for <name> and <altname> as direct children of <df_world>.
+    """
+    name = altname = None
+    depth = 0
+
+    context = etree.iterparse(filepath, events=('start', 'end'))
     for event, elem in context:
-        if elem.tag == 'name' and name is None:
-            name = elem.text
-        elif elem.tag == 'altname':
-            altname = elem.text
-            break
-        elem.clear()
+        if event == 'start':
+            depth += 1
+        elif event == 'end':
+            # depth 2 means direct child of root (df_world is depth 1)
+            if depth == 2:
+                if elem.tag == 'name' and name is None:
+                    name = elem.text
+                elif elem.tag == 'altname' and altname is None:
+                    altname = elem.text
+            depth -= 1
+            elem.clear()
+            # Stop once we have both or hit a deeper section
+            if (name and altname) or depth == 1 and elem.tag in ('regions', 'sites', 'artifacts'):
+                break
 
     del context
     return name, altname
 
 
 def get_world_info_from_legends(filepath):
-    """Extract world name from legends.xml (no altname available)."""
-    name = None
+    """Extract world name from legends.xml (no altname available).
 
-    context = etree.iterparse(filepath, events=('end',), tag='name')
+    Looks for <name> as direct child of <df_world>.
+    """
+    name = None
+    depth = 0
+
+    context = etree.iterparse(filepath, events=('start', 'end'))
     for event, elem in context:
-        # First <name> in legends.xml is the world name
-        if name is None:
-            name = elem.text
-            break
-        elem.clear()
+        if event == 'start':
+            depth += 1
+        elif event == 'end':
+            # depth 2 means direct child of root
+            if depth == 2 and elem.tag == 'name' and name is None:
+                name = elem.text
+                elem.clear()
+                break
+            depth -= 1
+            elem.clear()
 
     del context
     return name, None
@@ -191,7 +212,7 @@ def init_master_db():
 def generate_world_id(name):
     """Generate a unique ID for a world based on name and timestamp."""
     import time
-    raw = f"{name}_{time.time()}"
+    raw = f"{name or 'unknown'}_{time.time()}"
     return hashlib.md5(raw.encode()).hexdigest()[:12]
 
 
@@ -200,6 +221,8 @@ def register_world(name, altname, db_path, has_plus=False):
     conn = init_master_db()
     cursor = conn.cursor()
 
+    # Use fallback name if none provided (vanilla legends.xml has no world name)
+    display_name = name or "Unknown World"
     world_id = generate_world_id(name)
 
     # Unset any current world
@@ -208,7 +231,7 @@ def register_world(name, altname, db_path, has_plus=False):
     # Insert new world as current
     cursor.execute(
         "INSERT INTO worlds (id, name, altname, db_path, is_current, has_plus) VALUES (?, ?, ?, ?, 1, ?)",
-        (world_id, name, altname, str(db_path), 1 if has_plus else 0)
+        (world_id, display_name, altname, str(db_path), 1 if has_plus else 0)
     )
 
     conn.commit()
@@ -289,8 +312,8 @@ def run_import(legends_path=None, plus_path=None):
         conn = init_world_db(db_path)
         cursor = conn.cursor()
 
-        # Insert world info
-        cursor.execute("INSERT INTO world (name, altname) VALUES (?, ?)", (name, altname))
+        # Insert world info (use fallback if no name from vanilla legends.xml)
+        cursor.execute("INSERT INTO world (name, altname) VALUES (?, ?)", (name or "Unknown World", altname))
         conn.commit()
 
         # === LEGENDS.XML ===
@@ -333,9 +356,12 @@ def run_import(legends_path=None, plus_path=None):
         print("\nImporting artifacts...")
         def import_artifact(data):
             cursor.execute(
-                "INSERT OR REPLACE INTO artifacts (id, name, item_type, item_subtype, mat) VALUES (?, ?, ?, ?, ?)",
+                """INSERT OR REPLACE INTO artifacts
+                   (id, name, item_type, item_subtype, mat, creator_hfid, site_id, holder_hfid)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (data.get('id'), data.get('name') or data.get('name_string'),
-                 data.get('item_type'), data.get('item_subtype'), data.get('mat'))
+                 data.get('item_type'), data.get('item_subtype'), data.get('mat'),
+                 data.get('creator_hfid'), data.get('site_id'), data.get('holder_hfid'))
             )
         count = stream_elements(legends_clean, 'artifact', import_artifact)
         conn.commit()
@@ -647,10 +673,12 @@ def run_merge_plus(world_id, db_path, plus_path):
         name, altname = get_world_info(legends_plus_clean)
         print(f"  World: {name}" + (f" ({altname})" if altname else ""))
 
-        # Update world altname if we got one
+        # Update world name and altname from plus data
+        if name:
+            cursor.execute("UPDATE world SET name = ? WHERE name IS NULL OR name = ''", (name,))
         if altname:
             cursor.execute("UPDATE world SET altname = ? WHERE altname IS NULL", (altname,))
-            conn.commit()
+        conn.commit()
 
         print("\n--- Processing legends_plus.xml ---")
 
@@ -786,6 +814,36 @@ def run_merge_plus(world_id, db_path, plus_path):
         conn.commit()
         print(f"  Updated {count} historical events.")
 
+        # Artifacts
+        print("\nUpdating artifacts...")
+        def import_artifact_plus(data):
+            cursor.execute(
+                """UPDATE artifacts SET
+                   item_type = COALESCE(?, item_type),
+                   item_subtype = COALESCE(?, item_subtype),
+                   mat = COALESCE(?, mat),
+                   creator_hfid = COALESCE(?, creator_hfid),
+                   site_id = COALESCE(?, site_id),
+                   holder_hfid = COALESCE(?, holder_hfid)
+                   WHERE id = ?""",
+                (data.get('item_type'), data.get('item_subtype'), data.get('mat'),
+                 data.get('creator_hfid'), data.get('site_id'), data.get('holder_hfid'),
+                 data.get('id'))
+            )
+            # If artifact doesn't exist yet, insert it
+            if cursor.rowcount == 0:
+                cursor.execute(
+                    """INSERT INTO artifacts
+                       (id, name, item_type, item_subtype, mat, creator_hfid, site_id, holder_hfid)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (data.get('id'), data.get('name'),
+                     data.get('item_type'), data.get('item_subtype'), data.get('mat'),
+                     data.get('creator_hfid'), data.get('site_id'), data.get('holder_hfid'))
+                )
+        count = stream_elements(legends_plus_clean, 'artifact', import_artifact_plus)
+        conn.commit()
+        print(f"  Updated {count} artifacts.")
+
         # Written content
         print("\nImporting written content...")
         style_count = ref_count = 0
@@ -830,10 +888,13 @@ def run_merge_plus(world_id, db_path, plus_path):
         print("\nUpdating world status...")
         update_world_has_plus(world_id)
 
-        # Also update altname in master db if we got one
-        if altname:
+        # Also update name and altname in master db
+        if name or altname:
             master_conn = init_master_db()
-            master_conn.execute("UPDATE worlds SET altname = ? WHERE id = ?", (altname, world_id))
+            if name:
+                master_conn.execute("UPDATE worlds SET name = ? WHERE id = ? AND (name IS NULL OR name = '')", (name, world_id))
+            if altname:
+                master_conn.execute("UPDATE worlds SET altname = ? WHERE id = ?", (altname, world_id))
             master_conn.commit()
             master_conn.close()
 
