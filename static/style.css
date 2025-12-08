@@ -1824,3 +1824,50 @@ a:hover {
     color: #555;
     font-style: italic;
 }
+
+/* Modal history trail */
+.modal-history {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 4px;
+    z-index: 1001;
+}
+
+.history-item {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.history-item:hover {
+    border-color: #0f0;
+}
+
+.history-item.active {
+    border-color: #0f0;
+}
+
+.history-item img {
+    width: 20px;
+    height: 20px;
+    image-rendering: pixelated;
+    flex-shrink: 0;
+}
+
+.history-label {
+    font-size: 11px;
+    color: #aaa;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+}

@@ -954,12 +954,16 @@ def upload_map(world_id):
 
 @app.route('/world-map-image/<world_id>')
 def world_map_image(world_id):
-    """Serve the world map image."""
+    """Serve the world map image (terrain or uploaded)."""
+    # Prefer generated terrain map
+    terrain_path = DATA_DIR / 'worlds' / f'{world_id}_terrain.png'
+    if terrain_path.exists():
+        return send_file(terrain_path, mimetype='image/png')
+    # Fall back to uploaded map
     map_path = DATA_DIR / 'worlds' / f'{world_id}_map.png'
     if map_path.exists():
         return send_file(map_path, mimetype='image/png')
     else:
-        # Return a 1x1 transparent PNG as fallback
         return '', 404
 
 
@@ -1342,9 +1346,13 @@ def world_map():
         GROUP BY type ORDER BY count DESC
     """).fetchall()
 
-    # Check if map image exists
-    has_map = current_world and current_world.get('has_map')
+    # Check if map image exists (terrain or uploaded)
     world_id = current_world['id'] if current_world else None
+    has_map = False
+    if world_id:
+        terrain_path = DATA_DIR / 'worlds' / f'{world_id}_terrain.png'
+        map_path = DATA_DIR / 'worlds' / f'{world_id}_map.png'
+        has_map = terrain_path.exists() or map_path.exists()
 
     return render_template('map.html',
                          sites=sites_list,

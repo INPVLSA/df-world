@@ -63,8 +63,8 @@
                 <span class="nav-sep"></span>
                 <a href="{{ url_for('artifacts') }}"><img src="{{ url_for('static', filename='icons/artifact.png') }}" alt="" class="nav-icon">Artifacts</a>
                 <span class="nav-sep"></span>
-                <a href="{{ url_for('world_map') }}" class="nav-hidden"><span class="nav-icon-text">&#9635;</span>Map</a>
-                <span class="nav-sep nav-hidden"></span>
+                <a href="{{ url_for('world_map') }}"><img src="{{ url_for('static', filename='icons/map.png') }}" alt="" class="nav-icon">Map</a>
+                <span class="nav-sep"></span>
                 <a href="{{ url_for('events') }}"><img src="{{ url_for('static', filename='icons/scribe.png') }}" alt="" class="nav-icon">Events</a>
             </div>
         </div>
@@ -96,6 +96,8 @@
         </div>
     </div>
 
+    <div id="modal-history" class="modal-history" style="display: none;"></div>
+
     <script>
     // Global Entity Modal System
     window.EntityModal = (function() {
@@ -103,6 +105,74 @@
         var modalTitle = modal.querySelector('.modal-title');
         var modalContent = modal.querySelector('.modal-content');
         var modalLoading = modal.querySelector('.modal-loading');
+        var historyContainer = document.getElementById('modal-history');
+
+        // History state
+        var history = [];
+        var MAX_HISTORY = 10;
+
+        function addToHistory(type, id, name, race, siteType) {
+            // Don't add duplicate if same as last item
+            if (history.length > 0) {
+                var last = history[history.length - 1];
+                if (last.type === type && last.id == id) return;
+            }
+
+            history.push({ type: type, id: id, name: name, race: race, siteType: siteType });
+
+            // Limit history size
+            if (history.length > MAX_HISTORY) {
+                history.shift();
+            }
+
+            renderHistory();
+        }
+
+        function renderHistory() {
+            if (history.length === 0) {
+                historyContainer.style.display = 'none';
+                return;
+            }
+
+            historyContainer.style.display = 'flex';
+            var html = '';
+
+            // Render bottom to top (oldest first in DOM, newest at top visually with flex-direction: column-reverse)
+            history.forEach(function(item, idx) {
+                var spriteUrl = '';
+                if (item.type === 'figure' && item.race) {
+                    spriteUrl = '/static/icons/races/' + item.race + '.png';
+                } else if (item.type === 'site' && item.siteType) {
+                    spriteUrl = '/static/icons/sites/' + item.siteType.replace(/ /g, '_') + '.png';
+                }
+
+                var isActive = idx === history.length - 1;
+                var label = item.name ? titleCase(item.name) : item.type + ' #' + item.id;
+
+                html += '<div class="history-item' + (isActive ? ' active' : '') + '" data-type="' + item.type + '" data-id="' + item.id + '">';
+                if (spriteUrl) {
+                    html += '<img src="' + spriteUrl + '" alt="" onerror="this.style.display=\'none\'">';
+                }
+                html += '<span class="history-label">' + label + '</span>';
+                html += '</div>';
+            });
+
+            historyContainer.innerHTML = html;
+        }
+
+        function clearHistory() {
+            history = [];
+            historyContainer.style.display = 'none';
+            historyContainer.innerHTML = '';
+        }
+
+        // Click handler for history items
+        historyContainer.addEventListener('click', function(e) {
+            var item = e.target.closest('.history-item');
+            if (item) {
+                load(item.dataset.type, item.dataset.id);
+            }
+        });
         var closeBtn = modal.querySelector('.modal-close');
 
         function titleCase(str) {
@@ -395,6 +465,7 @@
         function hide() {
             modal.style.display = 'none';
             document.body.style.overflow = '';
+            clearHistory();
         }
 
         function setContent(html) {
@@ -697,6 +768,17 @@
                         setContent(renderer(data));
                     } else {
                         setContent('<pre>' + JSON.stringify(data, null, 2) + '</pre>');
+                    }
+
+                    // Add to history
+                    if (type === 'figure' && data.figure) {
+                        addToHistory('figure', id, data.figure.name, data.figure.race, null);
+                    } else if (type === 'site' && data.site) {
+                        addToHistory('site', id, data.site.name, null, data.site.type);
+                    } else if (type === 'artifact' && data.artifact) {
+                        addToHistory('artifact', id, data.artifact.name, null, null);
+                    } else if (type === 'entity' && data.entity) {
+                        addToHistory('entity', id, data.entity.name, null, null);
                     }
                 })
                 .catch(function(err) {

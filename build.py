@@ -371,6 +371,20 @@ def run_import(legends_path=None, plus_path=None):
         if has_plus:
             print("\n--- Processing legends_plus.xml ---")
 
+            # Update regions with coordinates from legends_plus
+            print("\nUpdating regions with coordinates...")
+            def update_region_coords(data):
+                region_id = data.get('id')
+                coords = data.get('coords')
+                if region_id is not None and coords:
+                    cursor.execute(
+                        "UPDATE regions SET coords = ? WHERE id = ?",
+                        (coords, region_id)
+                    )
+            count = stream_elements(legends_plus_clean, 'region', update_region_coords)
+            conn.commit()
+            print(f"  Updated {count} regions with coordinates.")
+
             # Landmasses
             print("\nImporting landmasses...")
             def import_landmass(data):
@@ -732,6 +746,20 @@ def run_merge_plus(world_id, db_path, plus_path):
         conn.commit()
 
         print("\n--- Processing legends_plus.xml ---")
+
+        # Update regions with coordinates from legends_plus
+        print("\nUpdating regions with coordinates...")
+        def update_region_coords(data):
+            region_id = data.get('id')
+            coords = data.get('coords')
+            if region_id is not None and coords:
+                cursor.execute(
+                    "UPDATE regions SET coords = ? WHERE id = ?",
+                    (coords, region_id)
+                )
+        count = stream_elements(legends_plus_clean, 'region', update_region_coords)
+        conn.commit()
+        print(f"  Updated {count} regions with coordinates.")
 
         # Landmasses
         print("\nImporting landmasses...")
