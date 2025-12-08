@@ -1667,6 +1667,31 @@ a:hover {
     image-rendering: pixelated;
 }
 
+/* Relationship groups */
+.rel-group {
+    margin-bottom: 8px;
+}
+
+.rel-group-label {
+    font-weight: bold;
+    color: #aaa;
+    font-size: 11px;
+    text-transform: capitalize;
+}
+
+.rel-group-items {
+    margin-left: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.relationship-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 /* Timeline (figure life events) */
 .timeline {
     max-height: 300px;

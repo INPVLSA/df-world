@@ -1545,6 +1545,18 @@ def api_figure(figure_id):
         ORDER BY hsl.link_type, s.name
     """, [figure_id]).fetchall()
 
+    # Get relationships (where this figure is source or target)
+    relationships = db.execute("""
+        SELECT r.*,
+               hf.name as related_name, hf.race as related_race
+        FROM hf_relationships r
+        LEFT JOIN historical_figures hf ON (
+            CASE WHEN r.source_hf = ? THEN r.target_hf ELSE r.source_hf END
+        ) = hf.id
+        WHERE r.source_hf = ? OR r.target_hf = ?
+        ORDER BY r.relationship, r.year
+    """, [figure_id, figure_id, figure_id]).fetchall()
+
     # Get life events (where this figure is involved)
     # hfid is direct column, other figure refs may be in extra_data JSON
     # victim_hf is used for hist_figure_died events (victim stored in extra_data)
@@ -1592,6 +1604,7 @@ def api_figure(figure_id):
         'figure': fig,
         'affiliations': [dict(a) for a in affiliations],
         'site_links': [dict(s) for s in site_links],
+        'relationships': [dict(r) for r in relationships],
         'events': events_list
     })
 

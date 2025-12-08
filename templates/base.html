@@ -459,6 +459,39 @@
                     html += '</div></div>';
                 }
 
+                // Relationships - grouped by type
+                if (data.relationships && data.relationships.length > 0) {
+                    html += '<div class="entity-section"><div class="entity-section-title">Relationships (' + data.relationships.length + ')</div>';
+
+                    // Group by relationship type
+                    var grouped = {};
+                    data.relationships.forEach(function(rel) {
+                        var relType = rel.relationship || 'related';
+                        if (!grouped[relType]) grouped[relType] = [];
+                        grouped[relType].push(rel);
+                    });
+
+                    // Render each group
+                    Object.keys(grouped).forEach(function(relType) {
+                        var items = grouped[relType];
+                        var label = relType.replace(/_/g, ' ');
+                        html += '<div class="rel-group"><span class="rel-group-label">' + titleCase(label) + ' (' + items.length + ')</span>';
+                        html += '<div class="rel-group-items">';
+                        items.forEach(function(rel) {
+                            var sprite = '';
+                            if (rel.related_race) {
+                                sprite = '<img src="/static/icons/races/' + rel.related_race + '.png" class="event-icon" alt="" onerror="this.style.display=\'none\'">';
+                            }
+                            var name = rel.related_name ? titleCase(rel.related_name) : 'Figure #' + (rel.source_hf == fig.id ? rel.target_hf : rel.source_hf);
+                            var targetId = rel.source_hf == fig.id ? rel.target_hf : rel.source_hf;
+                            html += '<div class="relationship-item">' + sprite + '<a href="#" class="entity-link" data-type="figure" data-id="' + targetId + '">' + name + '</a></div>';
+                        });
+                        html += '</div></div>';
+                    });
+
+                    html += '</div>';
+                }
+
                 // Life events / history
                 if (data.events && data.events.length > 0) {
                     html += '<div class="entity-section"><div class="entity-section-title">Life Events (' + data.events.length + (data.events.length >= 100 ? '+' : '') + ')</div>';
