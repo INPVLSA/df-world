@@ -8,6 +8,7 @@ A web interface for exploring your Dwarf Fortress world history.
 - **Sites** — Explore fortresses, towns, caves, and other locations with their structures
 - **Artifacts** — Discover named items with their creators, materials, and current holders
 - **Events** — View the history of your world year by year
+- **Interactive Map** — Terrain map with biomes, evilness variants, and mountain heights based on peak data. Pan, zoom (toward cursor), and click sites/peaks to navigate
 - **Interactive References** — Click on any figure, site, artifact, or entity name to open a detailed popup with nested navigation
 - **Dashboard** — See world statistics at a glance, manage multiple worlds
 
@@ -72,9 +73,22 @@ python build.py legends.xml [legends_plus.xml]
 
 [MIT](LICENSE)
 
-![fig-mod.png](docs/fig-mod.png)
-![fig.png](docs/fig.png)
-![sit-mod.png](docs/sit-mod.png)
-![db.png](docs/db.png)
-![sit.png](docs/sit.png)
-![art.png](docs/art.png)
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="docs/fig.png" width="400"></td>
+    <td><img src="docs/fig-mod.png" width="400"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/sit.png" width="400"></td>
+    <td><img src="docs/sit-mod.png" width="400"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/map.png" width="400"></td>
+    <td><img src="docs/art.png" width="400"></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/db.png" width="400"></td>
+  </tr>
+</table>
