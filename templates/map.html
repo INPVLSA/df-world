@@ -10,7 +10,30 @@
         <button id="zoom-in" class="map-btn" title="Zoom In">+</button>
         <button id="zoom-out" class="map-btn" title="Zoom Out">-</button>
         <button id="zoom-reset" class="map-btn" title="Reset">R</button>
-        <span class="map-info">{{ total_sites }} sites{% if not has_map %} | <a href="{{ url_for('index') }}">Upload map image</a>{% endif %}</span>
+        <button id="legend-toggle" class="map-btn" title="Toggle Legend">&#9776;</button>
+        <span class="map-info">{{ total_sites }} sites</span>
+    </div>
+
+    <div class="map-legend-dropdown" id="map-legend">
+        <div class="legend-items">
+            {% for tc in type_counts %}
+            {% set ti = get_site_type_info(tc.type) %}
+            <label class="legend-item">
+                <input type="checkbox" checked data-type="{{ tc.type|replace(' ', '-') }}" class="legend-toggle">
+                {% if ti.img %}
+                <img src="{{ ti.img }}" alt="{{ ti.icon }}" class="legend-icon">
+                {% else %}
+                <span class="legend-icon-text">{{ ti.icon }}</span>
+                {% endif %}
+                <span class="legend-label">{{ ti.label }}</span>
+                <span class="legend-count">({{ tc.count }})</span>
+            </label>
+            {% endfor %}
+        </div>
+        <div class="legend-actions">
+            <button id="legend-all" class="legend-btn">All</button>
+            <button id="legend-none" class="legend-btn">None</button>
+        </div>
     </div>
 
     <div class="map-viewport" id="map-viewport">
@@ -37,31 +60,14 @@
     <div class="map-tooltip" id="map-tooltip"></div>
 </div>
 
-<div class="map-legend">
-    <h3>Legend</h3>
-    <div class="legend-items">
-        {% for tc in type_counts %}
-        {% set ti = get_site_type_info(tc.type) %}
-        <label class="legend-item">
-            <input type="checkbox" checked data-type="{{ tc.type|replace(' ', '-') }}" class="legend-toggle">
-            {% if ti.img %}
-            <img src="{{ ti.img }}" alt="{{ ti.icon }}" class="legend-icon">
-            {% else %}
-            <span class="legend-icon-text">{{ ti.icon }}</span>
-            {% endif %}
-            <span class="legend-label">{{ ti.label }}</span>
-            <span class="legend-count">({{ tc.count }})</span>
-        </label>
-        {% endfor %}
-    </div>
-</div>
-
 <script>
 (function() {
     var viewport = document.getElementById('map-viewport');
     var canvas = document.getElementById('map-canvas');
     var tooltip = document.getElementById('map-tooltip');
     var markers = document.querySelectorAll('.map-marker');
+    var legend = document.getElementById('map-legend');
+    var legendToggle = document.getElementById('legend-toggle');
 
     var scale = 1;
     var minScale = 0.5;
@@ -73,6 +79,20 @@
     function updateTransform() {
         canvas.style.transform = 'translate(' + panX + 'px, ' + panY + 'px) scale(' + scale + ')';
     }
+
+    // Legend dropdown toggle
+    legendToggle.addEventListener('click', function() {
+        legend.classList.toggle('open');
+        legendToggle.classList.toggle('active');
+    });
+
+    // Close legend when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!legend.contains(e.target) && e.target !== legendToggle) {
+            legend.classList.remove('open');
+            legendToggle.classList.remove('active');
+        }
+    });
 
     // Zoom controls
     document.getElementById('zoom-in').addEventListener('click', function() {
@@ -154,14 +174,33 @@
     });
 
     // Legend toggle
-    document.querySelectorAll('.legend-toggle').forEach(function(checkbox) {
-        checkbox.addEventListener('change', function() {
-            var type = this.dataset.type;
-            var visible = this.checked;
+    function updateMarkerVisibility() {
+        document.querySelectorAll('.legend-toggle').forEach(function(checkbox) {
+            var type = checkbox.dataset.type;
+            var visible = checkbox.checked;
             document.querySelectorAll('.map-marker.type-' + type).forEach(function(m) {
                 m.style.display = visible ? '' : 'none';
             });
         });
+    }
+
+    document.querySelectorAll('.legend-toggle').forEach(function(checkbox) {
+        checkbox.addEventListener('change', updateMarkerVisibility);
+    });
+
+    // All/None buttons
+    document.getElementById('legend-all').addEventListener('click', function() {
+        document.querySelectorAll('.legend-toggle').forEach(function(cb) {
+            cb.checked = true;
+        });
+        updateMarkerVisibility();
+    });
+
+    document.getElementById('legend-none').addEventListener('click', function() {
+        document.querySelectorAll('.legend-toggle').forEach(function(cb) {
+            cb.checked = false;
+        });
+        updateMarkerVisibility();
     });
 })();
 </script>

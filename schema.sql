@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS regions (
     id INTEGER PRIMARY KEY,
     name TEXT,
     type TEXT,
-    coords TEXT
+    coords TEXT,
+    evilness TEXT
 );
 
 -- Underground regions

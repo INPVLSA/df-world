@@ -371,19 +371,20 @@ def run_import(legends_path=None, plus_path=None):
         if has_plus:
             print("\n--- Processing legends_plus.xml ---")
 
-            # Update regions with coordinates from legends_plus
-            print("\nUpdating regions with coordinates...")
-            def update_region_coords(data):
+            # Update regions with coordinates and evilness from legends_plus
+            print("\nUpdating regions with coordinates and evilness...")
+            def update_region_data(data):
                 region_id = data.get('id')
                 coords = data.get('coords')
-                if region_id is not None and coords:
+                evilness = data.get('evilness')
+                if region_id is not None:
                     cursor.execute(
-                        "UPDATE regions SET coords = ? WHERE id = ?",
-                        (coords, region_id)
+                        "UPDATE regions SET coords = ?, evilness = ? WHERE id = ?",
+                        (coords, evilness, region_id)
                     )
-            count = stream_elements(legends_plus_clean, 'region', update_region_coords)
+            count = stream_elements(legends_plus_clean, 'region', update_region_data)
             conn.commit()
-            print(f"  Updated {count} regions with coordinates.")
+            print(f"  Updated {count} regions with coordinates and evilness.")
 
             # Landmasses
             print("\nImporting landmasses...")
@@ -747,19 +748,20 @@ def run_merge_plus(world_id, db_path, plus_path):
 
         print("\n--- Processing legends_plus.xml ---")
 
-        # Update regions with coordinates from legends_plus
-        print("\nUpdating regions with coordinates...")
-        def update_region_coords(data):
+        # Update regions with coordinates and evilness from legends_plus
+        print("\nUpdating regions with coordinates and evilness...")
+        def update_region_data(data):
             region_id = data.get('id')
             coords = data.get('coords')
-            if region_id is not None and coords:
+            evilness = data.get('evilness')
+            if region_id is not None:
                 cursor.execute(
-                    "UPDATE regions SET coords = ? WHERE id = ?",
-                    (coords, region_id)
+                    "UPDATE regions SET coords = ?, evilness = ? WHERE id = ?",
+                    (coords, evilness, region_id)
                 )
-        count = stream_elements(legends_plus_clean, 'region', update_region_coords)
+        count = stream_elements(legends_plus_clean, 'region', update_region_data)
         conn.commit()
-        print(f"  Updated {count} regions with coordinates.")
+        print(f"  Updated {count} regions with coordinates and evilness.")
 
         # Landmasses
         print("\nImporting landmasses...")

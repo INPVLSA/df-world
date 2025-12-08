@@ -1382,6 +1382,14 @@ a:hover {
     cursor: pointer;
     z-index: 1;
     transition: transform 0.1s, z-index 0s;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.map-marker img {
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
 }
 
 .map-marker:hover {
@@ -1435,6 +1443,8 @@ a:hover {
     z-index: 1000;
     display: none;
     max-width: 250px;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .map-tooltip strong {
@@ -1448,21 +1458,35 @@ a:hover {
     font-size: 11px;
 }
 
-/* Map Legend */
-.map-legend {
+/* Map Legend Dropdown */
+.map-legend-dropdown {
+    display: none;
+    position: absolute;
+    top: 44px;
+    left: 0;
     background: #111;
     border: 2px solid #333;
-    padding: 1rem;
+    padding: 0.75rem;
+    z-index: 100;
+    max-height: 400px;
+    overflow-y: auto;
+    min-width: 200px;
 }
 
-.map-legend h3 {
-    margin-bottom: 0.75rem;
+.map-legend-dropdown.open {
+    display: block;
+}
+
+.map-btn.active {
+    background: #0f0;
+    color: #000;
+    border-color: #0f0;
 }
 
 .legend-items {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
 }
 
 .legend-item {
@@ -1472,6 +1496,7 @@ a:hover {
     cursor: pointer;
     padding: 0.25rem;
     transition: background 0.2s;
+    border-radius: 2px;
 }
 
 .legend-item:hover {
@@ -1480,12 +1505,14 @@ a:hover {
 
 .legend-item input[type="checkbox"] {
     accent-color: #0f0;
+    flex-shrink: 0;
 }
 
 .legend-icon {
     width: 16px;
     height: 16px;
     image-rendering: pixelated;
+    flex-shrink: 0;
 }
 
 .legend-icon-text {
@@ -1493,17 +1520,46 @@ a:hover {
     text-align: center;
     font-family: 'Courier New', monospace;
     font-size: 14px;
+    flex-shrink: 0;
 }
 
 .legend-label {
     color: #aaa;
-    font-size: 12px;
+    font-size: 11px;
+    white-space: nowrap;
 }
 
 .legend-count {
     color: #666;
-    font-size: 11px;
+    font-size: 10px;
     margin-left: auto;
+    flex-shrink: 0;
+}
+
+.legend-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #333;
+}
+
+.legend-btn {
+    flex: 1;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    padding: 0.4rem;
+    background: #1a1a1a;
+    border: 1px solid #444;
+    color: #aaa;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.legend-btn:hover {
+    background: #0f0;
+    color: #000;
+    border-color: #0f0;
 }
 
 /* ===========================================
