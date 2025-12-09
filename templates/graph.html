@@ -521,11 +521,21 @@
         // Layer 4: Grandchildren (generation 4, bottom)
         var grandchildren = data.grandchildren || [];
         var gcY = baseY + generationGap * 2;
+        // Group grandchildren by their parent (child of central figure)
+        var gcByParent = {};
+        grandchildren.forEach(function(gc) {
+            if (!gcByParent[gc.through]) gcByParent[gc.through] = [];
+            gcByParent[gc.through].push(gc);
+        });
         grandchildren.forEach(function(gc, i) {
             if (!nodeMap[gc.id]) {
-                // Position below their parent
-                var parentNode = nodeMap[gc.parent_id];
-                var xPos = parentNode ? parentNode.x : centerX + (i - grandchildren.length / 2) * 80;
+                // Position below their parent, spread out based on siblings
+                var parentNode = nodeMap[gc.through];
+                var siblingsOfGc = gcByParent[gc.through] || [gc];
+                var indexInGroup = siblingsOfGc.indexOf(gc);
+                var groupSize = siblingsOfGc.length;
+                var xOffset = (indexInGroup - (groupSize - 1) / 2) * 200;
+                var xPos = parentNode ? parentNode.x + xOffset : centerX + (i - grandchildren.length / 2) * 200;
                 var node = {
                     id: gc.id,
                     name: gc.name,
@@ -534,14 +544,14 @@
                     race_label: gc.race_label,
                     alive: gc.alive,
                     generation: 4,
-                    x: xPos + (i % 2 === 0 ? -40 : 40),
+                    x: xPos,
                     y: gcY,
                     isCentral: false
                 };
                 nodeMap[gc.id] = node;
                 allNodes.push(node);
-                if (gc.parent_id && nodeMap[gc.parent_id]) {
-                    allLinks.push({ source: gc.parent_id, target: gc.id, type: 'child' });
+                if (gc.through && nodeMap[gc.through]) {
+                    allLinks.push({ source: gc.through, target: gc.id, type: 'child' });
                 }
             }
         });
