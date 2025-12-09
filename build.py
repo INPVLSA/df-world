@@ -479,9 +479,22 @@ def run_import(legends_path=None, plus_path=None):
             count = stream_elements(legends_plus_clean, 'entity', import_entity)
             conn.commit()
             print(f"  Imported {count} entities, {pos_count} positions, {assign_count} assignments.")
+
+            # Creatures (creature_raw section)
+            print("\nImporting creature definitions...")
+            def import_creature(data):
+                creature_id = data.get('creature_id')
+                if creature_id:
+                    cursor.execute(
+                        "INSERT OR REPLACE INTO creatures (creature_id, name_singular, name_plural) VALUES (?, ?, ?)",
+                        (creature_id, data.get('name_singular'), data.get('name_plural'))
+                    )
+            count = stream_elements(legends_plus_clean, 'creature', import_creature)
+            conn.commit()
+            print(f"  Imported {count} creature definitions.")
         else:
             print("\n--- Skipping legends_plus.xml data (file not found) ---")
-            print("  Skipped: landmasses, mountain peaks, structures, entities")
+            print("  Skipped: landmasses, mountain peaks, structures, entities, creatures")
 
         # Historical figures (from legends.xml which has names)
         print("\nImporting historical figures from legends.xml...")
@@ -852,6 +865,19 @@ def run_merge_plus(world_id, db_path, plus_path):
         count = stream_elements(legends_plus_clean, 'entity', import_entity)
         conn.commit()
         print(f"  Imported {count} entities, {pos_count} positions, {assign_count} assignments.")
+
+        # Creatures (creature_raw section)
+        print("\nImporting creature definitions...")
+        def import_creature(data):
+            creature_id = data.get('creature_id')
+            if creature_id:
+                cursor.execute(
+                    "INSERT OR REPLACE INTO creatures (creature_id, name_singular, name_plural) VALUES (?, ?, ?)",
+                    (creature_id, data.get('name_singular'), data.get('name_plural'))
+                )
+        count = stream_elements(legends_plus_clean, 'creature', import_creature)
+        conn.commit()
+        print(f"  Imported {count} creature definitions.")
 
         # Relationships
         print("\nImporting relationships...")

@@ -7,6 +7,13 @@ CREATE TABLE IF NOT EXISTS world (
     altname TEXT
 );
 
+-- Creature definitions (from creature_raw in legends_plus.xml)
+CREATE TABLE IF NOT EXISTS creatures (
+    creature_id TEXT PRIMARY KEY,
+    name_singular TEXT,
+    name_plural TEXT
+);
+
 -- Geographic regions
 CREATE TABLE IF NOT EXISTS regions (
     id INTEGER PRIMARY KEY,

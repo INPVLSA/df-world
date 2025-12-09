@@ -826,6 +826,19 @@ def get_race_info(race):
                 icon, label = pat_icon, pat_label
                 break
 
+    # Try to get creature name from database (for procedural creatures like NIGHT_CREATURE_1)
+    if label is None or label.startswith('Night Creature'):
+        try:
+            db = get_db()
+            if db:
+                creature = db.execute(
+                    "SELECT name_singular FROM creatures WHERE creature_id = ?", [race]
+                ).fetchone()
+                if creature and creature['name_singular']:
+                    label = creature['name_singular'].title()
+        except:
+            pass
+
     # Default: replace underscores and title case
     if label is None:
         label = race.replace('_', ' ').title()
