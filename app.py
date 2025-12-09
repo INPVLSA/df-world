@@ -1467,14 +1467,17 @@ def sites():
     sort_dir = request.args.get('dir', 'asc')
 
     # Validate sort column and direction
-    valid_columns = ['id', 'name', 'type', 'coords']
+    valid_columns = ['id', 'name', 'type', 'coords', 'settlers']
     if sort_col not in valid_columns:
         sort_col = 'name'
     if sort_dir not in ['asc', 'desc']:
         sort_dir = 'asc'
 
     query = """SELECT s.*, e.race as civ_race,
-               (SELECT COUNT(*) FROM structures st WHERE st.site_id = s.id) as structure_count
+               (SELECT COUNT(*) FROM structures st WHERE st.site_id = s.id) as structure_count,
+               (SELECT COUNT(*) FROM hf_site_links hsl
+                JOIN historical_figures hf ON hsl.hfid = hf.id
+                WHERE hsl.site_id = s.id AND hf.death_year = -1) as settlers
                FROM sites s
                LEFT JOIN entities e ON s.civ_id = e.id
                WHERE 1=1"""

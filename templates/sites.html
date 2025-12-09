@@ -27,6 +27,7 @@
             <th class="sortable{% if sort == 'name' %} sorted {{ dir }}{% endif %}" data-sort="name">Name</th>
             <th class="sortable{% if sort == 'type' %} sorted {{ dir }}{% endif %}" data-sort="type">Type</th>
             <th class="sortable{% if sort == 'coords' %} sorted {{ dir }}{% endif %}" data-sort="coords">Coords</th>
+            <th class="sortable{% if sort == 'settlers' %} sorted {{ dir }}{% endif %}" data-sort="settlers">Settlers</th>
             <th class="{% if not has_plus %}col-disabled{% endif %}">Civilization{% if not has_plus %}<span class="col-plus-badge" title="Requires DFHack legends_plus.xml">+</span>{% endif %}</th>
         </tr>
     </thead>
@@ -38,6 +39,7 @@
             <td><a href="#" class="entity-link" data-type="site" data-id="{{ site.id }}">{{ site.name|title if site.name else '(unnamed)' }}</a></td>
             <td class="type-cell">{% set ti = get_site_type_info(site.type) %}{% if ti.img %}<img src="{{ ti.img }}" class="type-icon" alt="">{% else %}<span class="type-icon-text">{{ ti.icon }}</span>{% endif %} {{ ti.label }}</td>
             <td>{{ site.coords or '-' }}</td>
+            <td>{{ site.settlers or 0 }}</td>
             <td class="race-cell">{% if site.civ_id %}<a href="#" class="entity-link" data-type="entity" data-id="{{ site.civ_id }}">{% set ri = get_race_info(site.civ_race|upper) %}{% if ri.img %}<img src="{{ ri.img }}" class="race-icon" alt="">{% else %}<span class="race-icon-text">{{ ri.icon }}</span>{% endif %} {{ ri.label }}</a>{% else %}-{% endif %}</td>
         </tr>
         {% endfor %}
@@ -78,9 +80,9 @@
 
     function renderStructures(structures) {
         if (!structures || structures.length === 0) {
-            return '<tr class="structures-row"><td colspan="6" class="structures-cell"><div class="structures-content"><em>No structures</em></div></td></tr>';
+            return '<tr class="structures-row"><td colspan="7" class="structures-cell"><div class="structures-content"><em>No structures</em></div></td></tr>';
         }
-        var html = '<tr class="structures-row"><td colspan="6" class="structures-cell"><div class="structures-content"><div class="structures-list">';
+        var html = '<tr class="structures-row"><td colspan="7" class="structures-cell"><div class="structures-content"><div class="structures-list">';
         structures.forEach(function(s) {
             var icon = s.type_img ? '<img src="' + s.type_img + '" class="structure-icon" alt="">' : '<span class="structure-icon-text">' + s.type_icon + '</span>';
             var matchClass = s.matches ? ' structure-match' : '';
@@ -107,12 +109,12 @@
 
             // Show DFHack required message if no plus data
             if (!hasPlus) {
-                siteRow.insertAdjacentHTML('afterend', '<tr class="structures-row"><td colspan="6" class="structures-cell"><div class="structures-content structures-missing"><span class="missing-icon">!</span> Structure data requires DFHack <code>legends_plus.xml</code> export. <a href="/">Merge DFHack data</a> to enable this feature.</div></td></tr>');
+                siteRow.insertAdjacentHTML('afterend', '<tr class="structures-row"><td colspan="7" class="structures-cell"><div class="structures-content structures-missing"><span class="missing-icon">!</span> Structure data requires DFHack <code>legends_plus.xml</code> export. <a href="/">Merge DFHack data</a> to enable this feature.</div></td></tr>');
                 return;
             }
 
             // Always fetch fresh when there's a search to get match info
-            siteRow.insertAdjacentHTML('afterend', '<tr class="structures-row"><td colspan="6" class="structures-cell"><div class="structures-content"><em>Loading...</em></div></td></tr>');
+            siteRow.insertAdjacentHTML('afterend', '<tr class="structures-row"><td colspan="7" class="structures-cell"><div class="structures-content"><em>Loading...</em></div></td></tr>');
             var url = '/sites/' + siteId + '/structures';
             if (currentSearch) {
                 url += '?q=' + encodeURIComponent(currentSearch);
@@ -216,6 +218,7 @@
                     '<td><a href="#" class="entity-link" data-type="site" data-id="' + site.id + '">' + titleCase(site.name) + '</a></td>' +
                     '<td class="type-cell">' + (site.type_img ? '<img src="' + site.type_img + '" class="type-icon" alt="">' : '<span class="type-icon-text">' + site.type_icon + '</span>') + ' ' + site.type_label + '</td>' +
                     '<td>' + (site.coords || '-') + '</td>' +
+                    '<td>' + (site.settlers || 0) + '</td>' +
                     '<td class="race-cell">' + civCell + '</td>' +
                 '</tr>';
             });
