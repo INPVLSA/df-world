@@ -498,9 +498,9 @@ def run_import(legends_path=None, plus_path=None):
 
         # Historical figures (from legends.xml which has names)
         print("\nImporting historical figures from legends.xml...")
-        entity_link_count = site_link_count = 0
+        entity_link_count = site_link_count = hf_link_count = 0
         def import_hf(data):
-            nonlocal entity_link_count, site_link_count
+            nonlocal entity_link_count, site_link_count, hf_link_count
             hfid = data.get('id')
             cursor.execute(
                 "INSERT OR REPLACE INTO historical_figures (id, name, race, caste, sex, birth_year, death_year) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -531,9 +531,24 @@ def run_import(legends_path=None, plus_path=None):
                         (hfid, slink.get('site_id'), slink.get('link_type'))
                     )
                     site_link_count += 1
+
+            # HF links (family relationships: child, spouse, etc.)
+            hflinks = data.get('hf_link', [])
+            if isinstance(hflinks, dict):
+                hflinks = [hflinks]
+            for hflink in hflinks:
+                if isinstance(hflink, dict):
+                    target_hfid = hflink.get('hfid')
+                    link_type = hflink.get('link_type', '').replace(' ', '_')
+                    if target_hfid and link_type:
+                        cursor.execute(
+                            "INSERT OR IGNORE INTO hf_relationships (source_hf, target_hf, relationship, year) VALUES (?, ?, ?, ?)",
+                            (hfid, target_hfid, link_type, None)
+                        )
+                        hf_link_count += 1
         count = stream_elements(legends_clean, 'historical_figure', import_hf)
         conn.commit()
-        print(f"  Imported {count} historical figures, {entity_link_count} entity links, {site_link_count} site links.")
+        print(f"  Imported {count} historical figures, {entity_link_count} entity links, {site_link_count} site links, {hf_link_count} family links.")
 
         # Relationships (legends_plus only)
         if has_plus:

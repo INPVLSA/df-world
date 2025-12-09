@@ -1,0 +1,1339 @@
+{% extends "base.html" %}
+
+{% block title %}Relations Graph - DF Tales{% endblock %}
+
+{% block content %}
+<h1>Relations Graph</h1>
+
+<div class="graph-container">
+    <div class="graph-controls">
+        <div class="graph-search-wrapper">
+            <input type="text" id="graph-search" class="graph-search-input" placeholder="Search figure...">
+            <div class="graph-search-results" id="graph-search-results"></div>
+        </div>
+        <div class="graph-mode-toggle">
+            <button id="mode-network" class="mode-btn" title="Network view showing all relationships">Network</button>
+            <button id="mode-tree" class="mode-btn active" title="Family tree view">Family Tree</button>
+        </div>
+        <div class="graph-depth-control" id="depth-control">
+            <label for="depth-select">Depth:</label>
+            <select id="depth-select">
+                <option value="1">1</option>
+                <option value="2" selected>2</option>
+                <option value="3">3</option>
+            </select>
+        </div>
+        <button id="graph-reset" class="graph-btn" title="Reset View">Reset</button>
+    </div>
+
+    <div class="graph-legend">
+        <div class="legend-title">Relationship Types</div>
+        <div class="legend-items" id="graph-legend-items"></div>
+    </div>
+
+    <div class="graph-viewport" id="graph-viewport">
+        <div class="graph-empty" id="graph-empty">
+            <p>Search for a figure to explore their relationships</p>
+        </div>
+        <svg id="graph-svg"></svg>
+    </div>
+
+    <div class="graph-tooltip" id="graph-tooltip"></div>
+</div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+(function() {
+    var svg = d3.select('#graph-svg');
+    var viewport = document.getElementById('graph-viewport');
+    var tooltip = document.getElementById('graph-tooltip');
+    var emptyState = document.getElementById('graph-empty');
+    var searchInput = document.getElementById('graph-search');
+    var searchResults = document.getElementById('graph-search-results');
+    var depthSelect = document.getElementById('depth-select');
+    var depthControl = document.getElementById('depth-control');
+    var legendItems = document.getElementById('graph-legend-items');
+    var legendContainer = document.querySelector('.graph-legend');
+    var modeNetworkBtn = document.getElementById('mode-network');
+    var modeTreeBtn = document.getElementById('mode-tree');
+    var searchTimeout = null;
+
+    var width, height;
+    var simulation = null;
+    var currentFigureId = null;
+    var currentMode = 'tree'; // 'network' or 'tree'
+    var graphData = { nodes: [], links: [] };
+    var treeData = null;
+
+    // Relationship type colors
+    var relationshipColors = {
+        // Family
+        'mother': '#ff6b9d',
+        'father': '#6b9dff',
+        'child': '#9dff6b',
+        'spouse': '#ffb86b',
+        'former_spouse': '#a86bff',
+        // Social
+        'lover': '#ff6bd4',
+        'former_lover': '#b86bff',
+        'childhood_friend': '#98fb98',
+        'war_buddy': '#cd5c5c',
+        'artistic_buddy': '#dda0dd',
+        'athletic_buddy': '#87ceeb',
+        'scholar_buddy': '#f0e68c',
+        'athlete_buddy': '#87ceeb',
+        // Rivalries/Grudges
+        'jealous_obsession': '#ff4500',
+        'grudge': '#8b0000',
+        'supernatural_grudge': '#4b0082',
+        'religious_persecution_grudge': '#800000',
+        'persecution_grudge': '#800000',
+        'jealous_relationship_grudge': '#dc143c',
+        'athletic_rival': '#ff6347',
+        'business_rival': '#b8860b',
+        // Other
+        'deity': '#ffd700',
+        'master': '#8b4513',
+        'apprentice': '#d2691e',
+        'lieutenant': '#556b2f',
+        'companion': '#20b2aa',
+        'pet_owner': '#98fb98',
+        'prisoner': '#696969',
+        'imprisoner': '#2f4f4f',
+        'worship': '#ffd700',
+        'default': '#999'
+    };
+
+    function getRelColor(relType) {
+        var key = (relType || '').toLowerCase().replace(/ /g, '_');
+        return relationshipColors[key] || relationshipColors.default;
+    }
+
+    function titleCase(str) {
+        if (!str) return '(unnamed)';
+        return str.replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+    }
+
+    function updateDimensions() {
+        var rect = viewport.getBoundingClientRect();
+        width = rect.width;
+        height = rect.height;
+        svg.attr('width', width).attr('height', height);
+    }
+
+    // Search functionality
+    function performSearch(query) {
+        if (query.length < 2) {
+            searchResults.classList.remove('open');
+            return;
+        }
+
+        fetch('/api/figures/search?q=' + encodeURIComponent(query) + '&limit=10')
+            .then(function(r) { return r.json(); })
+            .then(function(results) {
+                if (results.length === 0) {
+                    searchResults.innerHTML = '<div class="graph-search-empty">No figures found</div>';
+                } else {
+                    var html = '';
+                    results.forEach(function(fig) {
+                        var icon = fig.race_img
+                            ? '<img src="' + fig.race_img + '" alt="" class="search-result-icon">'
+                            : '<span class="search-result-icon-text">' + (fig.race_icon || '?') + '</span>';
+                        html += '<div class="graph-search-result" data-id="' + fig.id + '">' +
+                            icon +
+                            '<span class="result-name">' + titleCase(fig.name) + '</span>' +
+                            '<span class="result-race">' + (fig.race_label || '') + '</span>' +
+                            '</div>';
+                    });
+                    searchResults.innerHTML = html;
+                }
+                searchResults.classList.add('open');
+            })
+            .catch(function() {
+                searchResults.innerHTML = '<div class="graph-search-empty">Error searching</div>';
+                searchResults.classList.add('open');
+            });
+    }
+
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+            performSearch(searchInput.value.trim());
+        }, 200);
+    });
+
+    searchInput.addEventListener('focus', function() {
+        if (searchInput.value.trim().length >= 2) {
+            performSearch(searchInput.value.trim());
+        }
+    });
+
+    searchResults.addEventListener('click', function(e) {
+        var result = e.target.closest('.graph-search-result');
+        if (result) {
+            var figId = parseInt(result.dataset.id);
+            if (currentMode === 'tree') {
+                loadFamilyTree(figId);
+            } else {
+                loadGraph(figId);
+            }
+            searchResults.classList.remove('open');
+            searchInput.value = '';
+        }
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!searchResults.contains(e.target) && e.target !== searchInput) {
+            searchResults.classList.remove('open');
+        }
+    });
+
+    depthSelect.addEventListener('change', function() {
+        if (currentFigureId) {
+            loadGraph(currentFigureId);
+        }
+    });
+
+    document.getElementById('graph-reset').addEventListener('click', function() {
+        if (currentMode === 'network' && simulation) {
+            simulation.alpha(0.3).restart();
+        } else if (currentMode === 'tree' && currentFigureId) {
+            loadFamilyTree(currentFigureId);
+        }
+    });
+
+    // Mode toggle handlers
+    modeNetworkBtn.addEventListener('click', function() {
+        if (currentMode !== 'network') {
+            currentMode = 'network';
+            modeNetworkBtn.classList.add('active');
+            modeTreeBtn.classList.remove('active');
+            depthControl.style.display = 'flex';
+            legendContainer.style.display = 'block';
+            updateUrl();
+            if (currentFigureId) {
+                loadGraph(currentFigureId);
+            }
+        }
+    });
+
+    modeTreeBtn.addEventListener('click', function() {
+        if (currentMode !== 'tree') {
+            currentMode = 'tree';
+            modeTreeBtn.classList.add('active');
+            modeNetworkBtn.classList.remove('active');
+            depthControl.style.display = 'none';
+            legendContainer.style.display = 'none';
+            updateUrl();
+            if (currentFigureId) {
+                loadFamilyTree(currentFigureId);
+            }
+        }
+    });
+
+    function updateLegend(links) {
+        var types = {};
+        links.forEach(function(l) {
+            var t = l.type || 'unknown';
+            types[t] = true;
+        });
+
+        var html = '';
+        Object.keys(types).sort().forEach(function(t) {
+            var color = getRelColor(t);
+            var label = t.replace(/_/g, ' ');
+            html += '<div class="legend-item">' +
+                '<span class="legend-color" style="background-color: ' + color + ';"></span>' +
+                '<span class="legend-label">' + titleCase(label) + '</span>' +
+                '</div>';
+        });
+        legendItems.innerHTML = html;
+    }
+
+    function loadGraph(figureId, skipConfirm) {
+        currentFigureId = figureId;
+        var depth = depthSelect.value;
+        updateUrl();
+
+        emptyState.style.display = 'none';
+
+        fetch('/api/graph/' + figureId + '?depth=' + depth)
+            .then(function(r) {
+                if (!r.ok) throw new Error('Not found');
+                return r.json();
+            })
+            .then(function(data) {
+                if (!skipConfirm && data.nodes.length > 150) {
+                    if (!confirm('This graph has ' + data.nodes.length + ' nodes which may be slow to render. Continue?')) {
+                        emptyState.innerHTML = '<p>Graph loading cancelled. Try reducing depth or use Family Tree mode.</p>';
+                        emptyState.style.display = 'flex';
+                        return;
+                    }
+                }
+                graphData = data;
+                updateLegend(data.links);
+                renderGraph(data);
+            })
+            .catch(function(err) {
+                emptyState.innerHTML = '<p>Could not load graph for this figure</p>';
+                emptyState.style.display = 'flex';
+            });
+    }
+
+    function loadFamilyTree(figureId) {
+        currentFigureId = figureId;
+        updateUrl();
+        emptyState.style.display = 'none';
+
+        fetch('/api/family-tree/' + figureId)
+            .then(function(r) {
+                if (!r.ok) throw new Error('Not found');
+                return r.json();
+            })
+            .then(function(data) {
+                treeData = data;
+                renderFamilyTree(data);
+            })
+            .catch(function(err) {
+                emptyState.innerHTML = '<p>Could not load family tree for this figure</p>';
+                emptyState.style.display = 'flex';
+            });
+    }
+
+    function renderFamilyTree(data) {
+        svg.selectAll('*').remove();
+        updateDimensions();
+
+        if (!data.central) {
+            emptyState.innerHTML = '<p>Figure not found</p>';
+            emptyState.style.display = 'flex';
+            return;
+        }
+
+        emptyState.style.display = 'none';
+
+        // Create container group for zoom
+        var g = svg.append('g');
+
+        // Zoom behavior
+        var zoom = d3.zoom()
+            .scaleExtent([0.2, 3])
+            .on('zoom', function(event) {
+                g.attr('transform', event.transform);
+            });
+
+        svg.call(zoom);
+
+        // Build tree structure with proper spacing
+        var nodeWidth = 180;
+        var nodeHeight = 80;
+        var generationGap = 120;
+        var siblingGap = 30;
+
+        var allNodes = [];
+        var allLinks = [];
+        var nodeMap = {};
+
+        // Helper to create a node
+        function createNode(person, gen, index, total, xOffset) {
+            if (!person || nodeMap[person.id]) return null;
+            var totalWidth = total * (nodeWidth + siblingGap) - siblingGap;
+            var startX = xOffset - totalWidth / 2;
+            var node = {
+                id: person.id,
+                name: person.name,
+                race: person.race,
+                race_img: person.race_img,
+                race_label: person.race_label,
+                alive: person.alive,
+                birth_year: person.birth_year,
+                death_year: person.death_year,
+                generation: gen,
+                x: startX + index * (nodeWidth + siblingGap) + nodeWidth / 2,
+                y: gen * generationGap,
+                isCentral: person.id === data.central.id
+            };
+            nodeMap[person.id] = node;
+            allNodes.push(node);
+            return node;
+        }
+
+        // Calculate center X
+        var centerX = width / 2;
+        var baseY = height / 2 - generationGap;
+
+        // Layer 0: Central figure (generation 2 visually, in middle)
+        var centralNode = {
+            id: data.central.id,
+            name: data.central.name,
+            race: data.central.race,
+            race_img: data.central.race_img,
+            race_label: data.central.race_label,
+            alive: data.central.alive,
+            birth_year: data.central.birth_year,
+            death_year: data.central.death_year,
+            generation: 2,
+            x: centerX,
+            y: baseY,
+            isCentral: true
+        };
+        nodeMap[data.central.id] = centralNode;
+        allNodes.push(centralNode);
+
+        // Layer 1: Parents (generation 1, above central)
+        var parents = data.parents || [];
+        var parentY = baseY - generationGap;
+        var parentSpacing = 440;
+        parents.forEach(function(p, i) {
+            if (!nodeMap[p.id]) {
+                var xPos = centerX + (i === 0 ? -parentSpacing / 2 : parentSpacing / 2);
+                if (parents.length === 1) xPos = centerX;
+                var node = {
+                    id: p.id,
+                    name: p.name,
+                    race: p.race,
+                    race_img: p.race_img,
+                    race_label: p.race_label,
+                    alive: p.alive,
+                    birth_year: p.birth_year,
+                    death_year: p.death_year,
+                    generation: 1,
+                    x: xPos,
+                    y: parentY,
+                    isCentral: false,
+                    relType: p.rel_type
+                };
+                nodeMap[p.id] = node;
+                allNodes.push(node);
+                allLinks.push({ source: p.id, target: data.central.id, type: p.rel_type });
+            }
+        });
+
+        // Layer 0: Grandparents (generation 0, top)
+        var grandparents = data.grandparents || [];
+        var grandparentY = baseY - generationGap * 2;
+        // Group grandparents by their child (parent of central figure)
+        var gpByParent = {};
+        grandparents.forEach(function(gp) {
+            if (!gpByParent[gp.through]) gpByParent[gp.through] = [];
+            gpByParent[gp.through].push(gp);
+        });
+        grandparents.forEach(function(gp, i) {
+            if (!nodeMap[gp.id]) {
+                // Position grandparents above their child (parent)
+                var parentNode = nodeMap[gp.through];
+                var siblingsOfGp = gpByParent[gp.through] || [gp];
+                var indexInGroup = siblingsOfGp.indexOf(gp);
+                var xOffset = (indexInGroup === 0 ? -100 : 100);
+                var xPos = parentNode ? parentNode.x + xOffset : centerX + (i - grandparents.length / 2) * 220;
+                var node = {
+                    id: gp.id,
+                    name: gp.name,
+                    race: gp.race,
+                    race_img: gp.race_img,
+                    race_label: gp.race_label,
+                    alive: gp.alive,
+                    generation: 0,
+                    x: xPos,
+                    y: grandparentY,
+                    isCentral: false,
+                    relType: gp.relation
+                };
+                nodeMap[gp.id] = node;
+                allNodes.push(node);
+                allLinks.push({ source: gp.id, target: gp.through, type: gp.relation });
+            }
+        });
+
+        // Layer 2: Spouses (same generation as central, beside them)
+        var spouses = data.spouses || [];
+        var spouseX = centerX + 240;
+        spouses.forEach(function(sp, i) {
+            if (!nodeMap[sp.id]) {
+                var node = {
+                    id: sp.id,
+                    name: sp.name,
+                    race: sp.race,
+                    race_img: sp.race_img,
+                    race_label: sp.race_label,
+                    alive: sp.alive,
+                    generation: 2,
+                    x: spouseX + i * 200,
+                    y: baseY,
+                    isCentral: false,
+                    relType: sp.rel_type
+                };
+                nodeMap[sp.id] = node;
+                allNodes.push(node);
+                allLinks.push({ source: data.central.id, target: sp.id, type: sp.rel_type, isSpouse: true });
+            }
+        });
+
+        // Layer 2: Siblings (same generation as central, to the left)
+        var siblings = data.siblings || [];
+        var siblingStartX = centerX - 240;
+        siblings.forEach(function(sib, i) {
+            if (!nodeMap[sib.id]) {
+                var node = {
+                    id: sib.id,
+                    name: sib.name,
+                    race: sib.race,
+                    race_img: sib.race_img,
+                    race_label: sib.race_label,
+                    alive: sib.alive,
+                    generation: 2,
+                    x: siblingStartX - i * 200,
+                    y: baseY,
+                    isCentral: false,
+                    relType: 'sibling'
+                };
+                nodeMap[sib.id] = node;
+                allNodes.push(node);
+                allLinks.push({ source: data.central.id, target: sib.id, type: 'sibling', isSibling: true });
+            }
+        });
+
+        // Layer 3: Children (generation 3, below central)
+        var children = data.children || [];
+        var childY = baseY + generationGap;
+        var childSpacing = 200;
+        var childStartX = centerX - (children.length - 1) * childSpacing / 2;
+        children.forEach(function(ch, i) {
+            if (!nodeMap[ch.id]) {
+                var node = {
+                    id: ch.id,
+                    name: ch.name,
+                    race: ch.race,
+                    race_img: ch.race_img,
+                    race_label: ch.race_label,
+                    alive: ch.alive,
+                    generation: 3,
+                    x: childStartX + i * childSpacing,
+                    y: childY,
+                    isCentral: false
+                };
+                nodeMap[ch.id] = node;
+                allNodes.push(node);
+                allLinks.push({ source: data.central.id, target: ch.id, type: 'child' });
+            }
+        });
+
+        // Layer 4: Grandchildren (generation 4, bottom)
+        var grandchildren = data.grandchildren || [];
+        var gcY = baseY + generationGap * 2;
+        grandchildren.forEach(function(gc, i) {
+            if (!nodeMap[gc.id]) {
+                // Position below their parent
+                var parentNode = nodeMap[gc.parent_id];
+                var xPos = parentNode ? parentNode.x : centerX + (i - grandchildren.length / 2) * 80;
+                var node = {
+                    id: gc.id,
+                    name: gc.name,
+                    race: gc.race,
+                    race_img: gc.race_img,
+                    race_label: gc.race_label,
+                    alive: gc.alive,
+                    generation: 4,
+                    x: xPos + (i % 2 === 0 ? -40 : 40),
+                    y: gcY,
+                    isCentral: false
+                };
+                nodeMap[gc.id] = node;
+                allNodes.push(node);
+                if (gc.parent_id && nodeMap[gc.parent_id]) {
+                    allLinks.push({ source: gc.parent_id, target: gc.id, type: 'child' });
+                }
+            }
+        });
+
+        // Draw links
+        var link = g.append('g')
+            .attr('class', 'tree-links')
+            .selectAll('path')
+            .data(allLinks)
+            .enter().append('path')
+            .attr('class', 'tree-link')
+            .attr('d', function(d) {
+                var source = nodeMap[d.source];
+                var target = nodeMap[d.target];
+                if (!source || !target) return '';
+
+                if (d.isSpouse || d.isSibling) {
+                    // Horizontal line for spouse/sibling connections
+                    return 'M' + source.x + ',' + source.y +
+                           'L' + target.x + ',' + target.y;
+                } else {
+                    // Curved line for parent-child connections
+                    var midY = (source.y + target.y) / 2;
+                    return 'M' + source.x + ',' + source.y +
+                           'C' + source.x + ',' + midY +
+                           ' ' + target.x + ',' + midY +
+                           ' ' + target.x + ',' + target.y;
+                }
+            })
+            .attr('fill', 'none')
+            .attr('stroke', function(d) {
+                if (d.isSpouse) return '#ffb86b';
+                if (d.isSibling) return '#9dff6b';
+                return d.type === 'mother' ? '#ff6b9d' : '#6b9dff';
+            })
+            .attr('stroke-width', 2)
+            .attr('stroke-dasharray', function(d) {
+                return (d.isSpouse || d.isSibling) ? '5,5' : 'none';
+            })
+            .attr('stroke-opacity', 0.7);
+
+        // Draw nodes
+        var node = g.append('g')
+            .attr('class', 'tree-nodes')
+            .selectAll('g')
+            .data(allNodes)
+            .enter().append('g')
+            .attr('class', 'tree-node')
+            .attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; });
+
+        // Node backgrounds (rounded rectangles)
+        node.append('rect')
+            .attr('x', -85)
+            .attr('y', -30)
+            .attr('width', 170)
+            .attr('height', 60)
+            .attr('rx', 6)
+            .attr('ry', 6)
+            .attr('fill', function(d) {
+                if (d.isCentral) return '#3a3a6a';
+                return d.alive ? '#2a2a4a' : '#1a1a2a';
+            })
+            .attr('stroke', function(d) {
+                if (d.isCentral) return '#ffd700';
+                if (d.relType === 'mother') return '#ff6b9d';
+                if (d.relType === 'father') return '#6b9dff';
+                if (d.relType === 'spouse' || d.relType === 'former_spouse') return '#ffb86b';
+                if (d.relType === 'sibling') return '#9dff6b';
+                return d.alive ? '#4a4a6a' : '#333';
+            })
+            .attr('stroke-width', function(d) { return d.isCentral ? 3 : 2; });
+
+        // Race icons
+        node.append('image')
+            .attr('xlink:href', function(d) { return d.race_img || ''; })
+            .attr('x', -75)
+            .attr('y', -20)
+            .attr('width', 24)
+            .attr('height', 24)
+            .style('image-rendering', 'pixelated')
+            .on('error', function() { d3.select(this).style('display', 'none'); });
+
+        // Node names
+        node.append('text')
+            .attr('class', 'tree-node-name')
+            .attr('x', -45)
+            .attr('y', -5)
+            .attr('text-anchor', 'start')
+            .text(function(d) {
+                var name = titleCase(d.name);
+                return name.length > 20 ? name.substring(0, 19) + '...' : name;
+            })
+            .style('fill', function(d) { return d.isCentral ? '#ffd700' : '#eee'; })
+            .style('font-size', '11px');
+
+        // Node info (race, years)
+        node.append('text')
+            .attr('class', 'tree-node-info')
+            .attr('x', -45)
+            .attr('y', 12)
+            .attr('text-anchor', 'start')
+            .text(function(d) {
+                var info = d.race_label || d.race || '';
+                return info.length > 20 ? info.substring(0, 19) + '...' : info;
+            })
+            .style('fill', '#888')
+            .style('font-size', '9px');
+
+        // Life years
+        node.append('text')
+            .attr('class', 'tree-node-years')
+            .attr('x', 0)
+            .attr('y', 24)
+            .attr('text-anchor', 'middle')
+            .text(function(d) {
+                if (d.birth_year !== null && d.birth_year !== undefined) {
+                    if (d.death_year !== null && d.death_year !== undefined) {
+                        return d.birth_year + ' - ' + d.death_year;
+                    }
+                    return 'b. ' + d.birth_year;
+                }
+                return '';
+            })
+            .style('fill', '#666')
+            .style('font-size', '9px');
+
+        // Tooltip and click handlers
+        node.on('mouseenter', function(event, d) {
+            var html = '<strong>' + titleCase(d.name) + '</strong><br>' +
+                '<span class="tooltip-race">' + (d.race_label || d.race || 'Unknown') + '</span><br>' +
+                '<span class="tooltip-status">' + (d.alive ? 'Alive' : 'Deceased') + '</span>';
+            if (d.relType) {
+                html += '<br><span class="tooltip-rel">' + d.relType.replace(/_/g, ' ') + '</span>';
+            }
+            tooltip.innerHTML = html;
+            tooltip.style.display = 'block';
+            tooltip.style.left = (event.pageX + 15) + 'px';
+            tooltip.style.top = (event.pageY + 15) + 'px';
+        })
+        .on('mousemove', function(event) {
+            tooltip.style.left = (event.pageX + 15) + 'px';
+            tooltip.style.top = (event.pageY + 15) + 'px';
+        })
+        .on('mouseleave', function() {
+            tooltip.style.display = 'none';
+        })
+        .on('click', function(event, d) {
+            if (event.shiftKey) {
+                // Shift+click to recenter tree on this node
+                loadFamilyTree(d.id);
+            } else {
+                // Regular click opens modal
+                if (typeof EntityModal !== 'undefined' && EntityModal.load) {
+                    EntityModal.load('figure', d.id);
+                }
+            }
+        });
+
+        // Style cursor
+        node.style('cursor', 'pointer');
+
+        // Generation labels - calculate leftmost X position per generation
+        var minXByGen = {};
+        allNodes.forEach(function(n) {
+            var leftEdge = n.x - 85; // 85 is half the card width
+            if (minXByGen[n.generation] === undefined || leftEdge < minXByGen[n.generation]) {
+                minXByGen[n.generation] = leftEdge;
+            }
+        });
+
+        var genLabels = [
+            { gen: 0, label: 'Grandparents', y: grandparentY },
+            { gen: 1, label: 'Parents', y: parentY },
+            { gen: 2, label: '', y: baseY },
+            { gen: 3, label: 'Children', y: childY },
+            { gen: 4, label: 'Grandchildren', y: gcY }
+        ];
+
+        var generations = {};
+        allNodes.forEach(function(n) {
+            generations[n.generation] = true;
+        });
+
+        g.append('g')
+            .attr('class', 'gen-labels')
+            .selectAll('text')
+            .data(genLabels.filter(function(gl) { return generations[gl.gen] && gl.label; }))
+            .enter().append('text')
+            .attr('x', function(d) { return minXByGen[d.gen] - 20; })
+            .attr('y', function(d) { return d.y; })
+            .attr('text-anchor', 'end')
+            .text(function(d) { return d.label; })
+            .style('fill', '#555')
+            .style('font-size', '12px')
+            .style('font-style', 'italic');
+
+        // Initial zoom to fit
+        setTimeout(function() {
+            var bounds = g.node().getBBox();
+            if (bounds.width > 0 && bounds.height > 0) {
+                var scale = 0.85 / Math.max(bounds.width / width, bounds.height / height);
+                scale = Math.min(scale, 1.2);
+                scale = Math.max(scale, 0.3);
+
+                var midX = bounds.x + bounds.width / 2;
+                var midY = bounds.y + bounds.height / 2;
+
+                var transform = d3.zoomIdentity
+                    .translate(width / 2, height / 2)
+                    .scale(scale)
+                    .translate(-midX, -midY);
+
+                svg.transition().duration(500).call(zoom.transform, transform);
+            }
+        }, 100);
+    }
+
+    function renderGraph(data) {
+        svg.selectAll('*').remove();
+        updateDimensions();
+
+        if (data.nodes.length === 0) {
+            emptyState.innerHTML = '<p>No relationships found</p>';
+            emptyState.style.display = 'flex';
+            return;
+        }
+
+        emptyState.style.display = 'none';
+
+        // Create container group for zoom
+        var g = svg.append('g');
+
+        // Zoom behavior
+        var zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on('zoom', function(event) {
+                g.attr('transform', event.transform);
+            });
+
+        svg.call(zoom);
+
+        // Arrow marker for directed edges
+        svg.append('defs').selectAll('marker')
+            .data(['arrow'])
+            .enter().append('marker')
+            .attr('id', 'arrow')
+            .attr('viewBox', '0 -5 10 10')
+            .attr('refX', 20)
+            .attr('refY', 0)
+            .attr('markerWidth', 6)
+            .attr('markerHeight', 6)
+            .attr('orient', 'auto')
+            .append('path')
+            .attr('d', 'M0,-5L10,0L0,5')
+            .attr('fill', '#666');
+
+        // Create links
+        var link = g.append('g')
+            .attr('class', 'links')
+            .selectAll('line')
+            .data(data.links)
+            .enter().append('line')
+            .attr('class', 'graph-link')
+            .attr('stroke', function(d) { return getRelColor(d.type); })
+            .attr('stroke-width', 2)
+            .attr('stroke-opacity', 0.6);
+
+        // Create link labels
+        var linkLabel = g.append('g')
+            .attr('class', 'link-labels')
+            .selectAll('text')
+            .data(data.links)
+            .enter().append('text')
+            .attr('class', 'graph-link-label')
+            .attr('text-anchor', 'middle')
+            .attr('dy', -5)
+            .text(function(d) { return (d.type || '').replace(/_/g, ' '); })
+            .style('fill', function(d) { return getRelColor(d.type); })
+            .style('font-size', '10px')
+            .style('opacity', 0.8);
+
+        // Create nodes
+        var node = g.append('g')
+            .attr('class', 'nodes')
+            .selectAll('g')
+            .data(data.nodes)
+            .enter().append('g')
+            .attr('class', 'graph-node')
+            .call(d3.drag()
+                .on('start', dragstarted)
+                .on('drag', dragged)
+                .on('end', dragended));
+
+        // Node circles
+        node.append('circle')
+            .attr('r', function(d) { return d.id === data.central_id ? 20 : 15; })
+            .attr('fill', function(d) {
+                if (d.id === data.central_id) return '#ffd700';
+                return d.alive ? '#4a9eff' : '#666';
+            })
+            .attr('stroke', function(d) {
+                return d.id === data.central_id ? '#ff8c00' : (d.alive ? '#2d5a8a' : '#444');
+            })
+            .attr('stroke-width', function(d) { return d.id === data.central_id ? 3 : 2; });
+
+        // Node images (race icons)
+        node.append('image')
+            .attr('xlink:href', function(d) { return d.race_img || ''; })
+            .attr('x', -10)
+            .attr('y', -10)
+            .attr('width', 20)
+            .attr('height', 20)
+            .style('pointer-events', 'none')
+            .on('error', function() { d3.select(this).style('display', 'none'); });
+
+        // Node labels
+        node.append('text')
+            .attr('class', 'graph-node-label')
+            .attr('dy', 30)
+            .attr('text-anchor', 'middle')
+            .text(function(d) { return titleCase(d.name); })
+            .style('font-size', function(d) { return d.id === data.central_id ? '12px' : '10px'; })
+            .style('fill', '#ccc');
+
+        // Tooltip
+        node.on('mouseenter', function(event, d) {
+            var html = '<strong>' + titleCase(d.name) + '</strong><br>' +
+                '<span class="tooltip-race">' + (d.race_label || d.race || 'Unknown') + '</span><br>' +
+                '<span class="tooltip-status">' + (d.alive ? 'Alive' : 'Deceased') + '</span>';
+            tooltip.innerHTML = html;
+            tooltip.style.display = 'block';
+            tooltip.style.left = (event.pageX + 15) + 'px';
+            tooltip.style.top = (event.pageY + 15) + 'px';
+        })
+        .on('mousemove', function(event) {
+            tooltip.style.left = (event.pageX + 15) + 'px';
+            tooltip.style.top = (event.pageY + 15) + 'px';
+        })
+        .on('mouseleave', function() {
+            tooltip.style.display = 'none';
+        })
+        .on('click', function(event, d) {
+            if (event.shiftKey) {
+                // Shift+click to recenter graph on this node
+                loadGraph(d.id);
+            } else {
+                // Regular click opens modal
+                if (typeof EntityModal !== 'undefined' && EntityModal.load) {
+                    EntityModal.load('figure', d.id);
+                }
+            }
+        });
+
+        // Force simulation
+        simulation = d3.forceSimulation(data.nodes)
+            .force('link', d3.forceLink(data.links)
+                .id(function(d) { return d.id; })
+                .distance(120))
+            .force('charge', d3.forceManyBody().strength(-300))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide().radius(40));
+
+        simulation.on('tick', function() {
+            link
+                .attr('x1', function(d) { return d.source.x; })
+                .attr('y1', function(d) { return d.source.y; })
+                .attr('x2', function(d) { return d.target.x; })
+                .attr('y2', function(d) { return d.target.y; });
+
+            linkLabel
+                .attr('x', function(d) { return (d.source.x + d.target.x) / 2; })
+                .attr('y', function(d) { return (d.source.y + d.target.y) / 2; });
+
+            node.attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; });
+        });
+
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        // Initial zoom to fit
+        setTimeout(function() {
+            var bounds = g.node().getBBox();
+            var fullWidth = bounds.width;
+            var fullHeight = bounds.height;
+            var midX = bounds.x + fullWidth / 2;
+            var midY = bounds.y + fullHeight / 2;
+
+            if (fullWidth > 0 && fullHeight > 0) {
+                var scale = 0.8 / Math.max(fullWidth / width, fullHeight / height);
+                scale = Math.min(scale, 1.5);
+
+                var transform = d3.zoomIdentity
+                    .translate(width / 2, height / 2)
+                    .scale(scale)
+                    .translate(-midX, -midY);
+
+                svg.transition().duration(500).call(zoom.transform, transform);
+            }
+        }, 500);
+    }
+
+    // Handle resize
+    window.addEventListener('resize', function() {
+        updateDimensions();
+        if (simulation) {
+            simulation.force('center', d3.forceCenter(width / 2, height / 2));
+            simulation.alpha(0.1).restart();
+        }
+    });
+
+    // Update URL with current state
+    function updateUrl() {
+        var params = new URLSearchParams();
+        if (currentFigureId) params.set('id', currentFigureId);
+        if (currentMode !== 'network') params.set('mode', currentMode);
+        var newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+        window.history.replaceState({}, '', newUrl);
+    }
+
+    // Initialize
+    updateDimensions();
+
+    // Check URL query params first, then fall back to template variable
+    var urlParams = new URLSearchParams(window.location.search);
+    var initialFigureId = urlParams.get('id') || {{ figure_id|default('null') }};
+    var initialMode = urlParams.get('mode') || 'tree';
+
+    // Set initial mode
+    if (initialMode === 'network') {
+        currentMode = 'network';
+        modeNetworkBtn.classList.add('active');
+        modeTreeBtn.classList.remove('active');
+        depthControl.style.display = 'flex';
+        legendContainer.style.display = 'block';
+    } else {
+        // Default to tree mode
+        depthControl.style.display = 'none';
+        legendContainer.style.display = 'none';
+    }
+
+    if (initialFigureId) {
+        if (currentMode === 'tree') {
+            loadFamilyTree(parseInt(initialFigureId));
+        } else {
+            loadGraph(parseInt(initialFigureId));
+        }
+    }
+})();
+</script>
+
+<style>
+.graph-container {
+    position: relative;
+    height: calc(100vh - 200px);
+    min-height: 500px;
+    background: #1a1a2e;
+    border: 2px solid #333;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.graph-controls {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 10;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.graph-search-wrapper {
+    position: relative;
+}
+
+.graph-search-input {
+    width: 200px;
+    padding: 8px 12px;
+    background: #2a2a4a;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #eee;
+    font-family: inherit;
+    font-size: 14px;
+}
+
+.graph-search-input:focus {
+    outline: none;
+    border-color: #4a9eff;
+}
+
+.graph-search-results {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 280px;
+    max-height: 300px;
+    overflow-y: auto;
+    background: #2a2a4a;
+    border: 1px solid #444;
+    border-radius: 4px;
+    margin-top: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+.graph-search-results.open {
+    display: block;
+}
+
+.graph-search-result {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #333;
+}
+
+.graph-search-result:hover {
+    background: #3a3a5a;
+}
+
+.graph-search-result:last-child {
+    border-bottom: none;
+}
+
+.search-result-icon {
+    width: 20px;
+    height: 20px;
+    image-rendering: pixelated;
+}
+
+.search-result-icon-text {
+    display: inline-block;
+    width: 20px;
+    text-align: center;
+}
+
+.graph-search-result .result-name {
+    flex: 1;
+    color: #eee;
+}
+
+.graph-search-result .result-race {
+    color: #888;
+    font-size: 12px;
+}
+
+.graph-search-empty {
+    padding: 12px;
+    color: #888;
+    text-align: center;
+}
+
+.graph-mode-toggle {
+    display: flex;
+    gap: 0;
+    border: 1px solid #444;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.mode-btn {
+    padding: 8px 14px;
+    background: #2a2a4a;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.mode-btn:first-child {
+    border-right: 1px solid #444;
+}
+
+.mode-btn:hover {
+    background: #3a3a5a;
+    color: #aaa;
+}
+
+.mode-btn.active {
+    background: #4a4a7a;
+    color: #ffd700;
+}
+
+.graph-depth-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #aaa;
+    font-size: 14px;
+}
+
+.graph-depth-control select {
+    padding: 6px 10px;
+    background: #2a2a4a;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #eee;
+    font-family: inherit;
+}
+
+.graph-btn {
+    padding: 8px 14px;
+    background: #2a2a4a;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #eee;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+}
+
+.graph-btn:hover {
+    background: #3a3a5a;
+    border-color: #555;
+}
+
+.graph-legend {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+    background: rgba(42, 42, 74, 0.95);
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 10px;
+    max-width: 200px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.graph-legend .legend-title {
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.graph-legend .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    font-size: 12px;
+}
+
+.graph-legend .legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}
+
+.graph-legend .legend-label {
+    color: #ccc;
+}
+
+.graph-viewport {
+    width: 100%;
+    height: 100%;
+}
+
+.graph-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #666;
+    font-size: 16px;
+}
+
+#graph-svg {
+    width: 100%;
+    height: 100%;
+}
+
+.graph-node {
+    cursor: pointer;
+}
+
+.graph-node:hover circle {
+    stroke-width: 3px;
+}
+
+.graph-node-label {
+    pointer-events: none;
+    text-shadow: 0 0 3px #000, 0 0 6px #000;
+}
+
+.graph-link {
+    stroke-linecap: round;
+}
+
+.graph-link-label {
+    pointer-events: none;
+    text-shadow: 0 0 3px #000, 0 0 6px #000;
+}
+
+.graph-tooltip {
+    display: none;
+    position: fixed;
+    background: rgba(30, 30, 50, 0.95);
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 10px;
+    color: #eee;
+    font-size: 13px;
+    z-index: 1000;
+    pointer-events: none;
+    max-width: 250px;
+}
+
+.graph-tooltip .tooltip-race {
+    color: #4a9eff;
+}
+
+.graph-tooltip .tooltip-status {
+    color: #888;
+    font-size: 12px;
+}
+
+/* Tree-specific styles */
+.tree-node {
+    cursor: pointer;
+}
+
+.tree-node:hover rect {
+    stroke-width: 3px;
+    filter: brightness(1.2);
+}
+
+.tree-node-name {
+    pointer-events: none;
+}
+
+.tree-node-info {
+    pointer-events: none;
+}
+
+.tree-node-years {
+    pointer-events: none;
+}
+
+.tree-link {
+    pointer-events: none;
+}
+
+.tooltip-rel {
+    color: #ffb86b;
+    font-style: italic;
+}
+
+@media (max-width: 768px) {
+    .graph-controls {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .graph-search-input {
+        width: 160px;
+    }
+
+    .graph-legend {
+        display: none;
+    }
+
+    .graph-mode-toggle {
+        width: 100%;
+    }
+
+    .mode-btn {
+        flex: 1;
+    }
+}
+</style>
+{% endblock %}

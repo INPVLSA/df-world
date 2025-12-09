@@ -2058,6 +2058,40 @@ def written_content():
 
 # ==================== API Endpoints for Modal ====================
 
+@app.route('/api/figures/search')
+def api_figures_search():
+    """Search figures by name for autocomplete."""
+    db = get_db()
+    if not db:
+        return jsonify([])
+
+    q = request.args.get('q', '').strip()
+    limit = request.args.get('limit', 10, type=int)
+    limit = min(limit, 50)
+
+    if len(q) < 2:
+        return jsonify([])
+
+    figures = db.execute("""
+        SELECT id, name, race, caste FROM historical_figures
+        WHERE name LIKE ? ORDER BY name LIMIT ?
+    """, [f'%{q}%', limit]).fetchall()
+
+    results = []
+    for fig in figures:
+        race_info = get_race_info(fig['race'], fig['caste'])
+        results.append({
+            'id': fig['id'],
+            'name': fig['name'],
+            'race': fig['race'],
+            'race_label': race_info['label'],
+            'race_img': race_info['img'],
+            'race_icon': race_info['icon']
+        })
+
+    return jsonify(results)
+
+
 @app.route('/api/figure/<int:figure_id>')
 def api_figure(figure_id):
     """Get figure details for modal."""
@@ -2503,6 +2537,249 @@ def api_written(written_id):
         'written': wc,
         'references': references,
         'artifact': artifact_data
+    })
+
+
+@app.route('/graph')
+def relations_graph():
+    """Relations graph visualization page."""
+    db = get_db()
+    if not db:
+        flash('Database not found. Run import first.', 'error')
+        return redirect(url_for('index'))
+
+    figure_id = request.args.get('figure', type=int)
+    return render_template('graph.html', figure_id=figure_id)
+
+
+@app.route('/api/graph/<int:figure_id>')
+def api_graph(figure_id):
+    """Get relationship graph data for a figure."""
+    db = get_db()
+    if not db:
+        return jsonify({'error': 'Database not found'}), 404
+
+    depth = request.args.get('depth', 1, type=int)
+    depth = min(depth, 3)  # Limit depth to prevent huge graphs
+
+    # Get the central figure
+    central = db.execute("""
+        SELECT id, name, race, caste FROM historical_figures WHERE id = ?
+    """, [figure_id]).fetchone()
+
+    if not central:
+        return jsonify({'error': 'Figure not found'}), 404
+
+    nodes = {}
+    links = []
+    visited = set()
+
+    def add_figure(fig_id, current_depth):
+        if fig_id in visited or current_depth > depth:
+            return
+        visited.add(fig_id)
+
+        fig = db.execute("""
+            SELECT id, name, race, caste, birth_year, death_year
+            FROM historical_figures WHERE id = ?
+        """, [fig_id]).fetchone()
+
+        if not fig:
+            return
+
+        race_info = get_race_info(fig['race'], fig['caste'])
+        nodes[fig_id] = {
+            'id': fig_id,
+            'name': fig['name'] or f"Figure #{fig_id}",
+            'race': fig['race'],
+            'race_label': race_info['label'],
+            'race_img': race_info['img'],
+            'alive': fig['death_year'] == -1,
+            'depth': current_depth
+        }
+
+        if current_depth < depth:
+            # Get relationships where this figure is source
+            rels = db.execute("""
+                SELECT target_hf as other_id, relationship, year
+                FROM hf_relationships WHERE source_hf = ?
+            """, [fig_id]).fetchall()
+
+            for rel in rels:
+                links.append({
+                    'source': fig_id,
+                    'target': rel['other_id'],
+                    'type': rel['relationship'],
+                    'year': rel['year']
+                })
+                add_figure(rel['other_id'], current_depth + 1)
+
+            # Get relationships where this figure is target
+            rels = db.execute("""
+                SELECT source_hf as other_id, relationship, year
+                FROM hf_relationships WHERE target_hf = ?
+            """, [fig_id]).fetchall()
+
+            for rel in rels:
+                links.append({
+                    'source': rel['other_id'],
+                    'target': fig_id,
+                    'type': rel['relationship'],
+                    'year': rel['year']
+                })
+                add_figure(rel['other_id'], current_depth + 1)
+
+    add_figure(figure_id, 0)
+
+    # Deduplicate links
+    seen_links = set()
+    unique_links = []
+    for link in links:
+        key = (min(link['source'], link['target']), max(link['source'], link['target']), link['type'])
+        if key not in seen_links:
+            seen_links.add(key)
+            unique_links.append(link)
+
+    return jsonify({
+        'nodes': list(nodes.values()),
+        'links': unique_links,
+        'central_id': figure_id
+    })
+
+
+@app.route('/api/family-tree/<int:figure_id>')
+def api_family_tree(figure_id):
+    """Get family tree data for a figure (parents, siblings, spouses, children)."""
+    db = get_db()
+    if not db:
+        return jsonify({'error': 'Database not found'}), 404
+
+    def get_figure_data(fig_id):
+        """Get figure info with race data."""
+        fig = db.execute("""
+            SELECT id, name, race, caste, birth_year, death_year
+            FROM historical_figures WHERE id = ?
+        """, [fig_id]).fetchone()
+        if not fig:
+            return None
+        race_info = get_race_info(fig['race'], fig['caste'])
+        return {
+            'id': fig['id'],
+            'name': fig['name'] or f"Figure #{fig['id']}",
+            'race': fig['race'],
+            'race_label': race_info['label'],
+            'race_img': race_info['img'],
+            'birth_year': fig['birth_year'],
+            'death_year': fig['death_year'],
+            'alive': fig['death_year'] == -1
+        }
+
+    # Get the central figure
+    central = get_figure_data(figure_id)
+    if not central:
+        return jsonify({'error': 'Figure not found'}), 404
+
+    # Get parents (where this figure has "mother" or "father" relationship TO someone)
+    parents = []
+    parent_rows = db.execute("""
+        SELECT target_hf, relationship FROM hf_relationships
+        WHERE source_hf = ? AND relationship IN ('mother', 'father')
+    """, [figure_id]).fetchall()
+    for row in parent_rows:
+        parent = get_figure_data(row['target_hf'])
+        if parent:
+            parent['relation'] = row['relationship']
+            parents.append(parent)
+
+    # Get spouses (current and former)
+    spouses = []
+    spouse_rows = db.execute("""
+        SELECT target_hf, relationship FROM hf_relationships
+        WHERE source_hf = ? AND relationship IN ('spouse', 'former_spouse', 'deceased_spouse')
+        UNION
+        SELECT source_hf, relationship FROM hf_relationships
+        WHERE target_hf = ? AND relationship IN ('spouse', 'former_spouse', 'deceased_spouse')
+    """, [figure_id, figure_id]).fetchall()
+    seen_spouses = set()
+    for row in spouse_rows:
+        if row['target_hf'] not in seen_spouses:
+            spouse = get_figure_data(row['target_hf'])
+            if spouse:
+                spouse['relation'] = row['relationship']
+                spouses.append(spouse)
+                seen_spouses.add(row['target_hf'])
+
+    # Get children (where someone has "mother" or "father" relationship TO this figure)
+    children = []
+    child_rows = db.execute("""
+        SELECT source_hf FROM hf_relationships
+        WHERE target_hf = ? AND relationship IN ('mother', 'father')
+    """, [figure_id]).fetchall()
+    seen_children = set()
+    for row in child_rows:
+        if row['source_hf'] not in seen_children:
+            child = get_figure_data(row['source_hf'])
+            if child:
+                # Find other parent
+                other_parent = db.execute("""
+                    SELECT target_hf, relationship FROM hf_relationships
+                    WHERE source_hf = ? AND relationship IN ('mother', 'father')
+                    AND target_hf != ?
+                """, [row['source_hf'], figure_id]).fetchone()
+                if other_parent:
+                    child['other_parent_id'] = other_parent['target_hf']
+                children.append(child)
+                seen_children.add(row['source_hf'])
+
+    # Get siblings (share at least one parent)
+    siblings = []
+    if parents:
+        parent_ids = [p['id'] for p in parents]
+        sibling_rows = db.execute("""
+            SELECT DISTINCT source_hf FROM hf_relationships
+            WHERE target_hf IN ({}) AND relationship IN ('mother', 'father')
+            AND source_hf != ?
+        """.format(','.join('?' * len(parent_ids))), parent_ids + [figure_id]).fetchall()
+        for row in sibling_rows:
+            sibling = get_figure_data(row['source_hf'])
+            if sibling:
+                siblings.append(sibling)
+
+    # Get grandparents
+    grandparents = []
+    for parent in parents:
+        gp_rows = db.execute("""
+            SELECT target_hf, relationship FROM hf_relationships
+            WHERE source_hf = ? AND relationship IN ('mother', 'father')
+        """, [parent['id']]).fetchall()
+        for row in gp_rows:
+            gp = get_figure_data(row['target_hf'])
+            if gp:
+                gp['relation'] = row['relationship']
+                gp['through'] = parent['id']
+                grandparents.append(gp)
+
+    # Get grandchildren
+    grandchildren = []
+    for child in children:
+        gc_rows = db.execute("""
+            SELECT source_hf FROM hf_relationships
+            WHERE target_hf = ? AND relationship IN ('mother', 'father')
+        """, [child['id']]).fetchall()
+        for row in gc_rows:
+            gc = get_figure_data(row['source_hf'])
+            if gc:
+                gc['through'] = child['id']
+                grandchildren.append(gc)
+
+    return jsonify({
+        'central': central,
+        'parents': parents,
+        'grandparents': grandparents,
+        'spouses': spouses,
+        'children': children,
+        'grandchildren': grandchildren,
+        'siblings': siblings
     })
 
 

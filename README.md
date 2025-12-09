@@ -9,6 +9,7 @@ A web interface for exploring your Dwarf Fortress world history.
 - **Artifacts** — Discover named items with their creators, materials, and current holders
 - **Events** — View the history of your world year by year
 - **Interactive Map** — Terrain map with biomes, evilness variants, and mountain heights based on peak data. Pan, zoom (toward cursor), and click sites/peaks to navigate
+- **Family Tree** — Visualize genealogical relationships with parents, grandparents, spouses, siblings, children, and grandchildren
 - **Interactive References** — Click on any figure, site, artifact, or entity name to open a detailed popup with nested navigation
 - **Dashboard** — See world statistics at a glance, manage multiple worlds
 
@@ -89,6 +90,7 @@ python build.py legends.xml [legends_plus.xml]
     <td><img src="docs/art.png" width="400"></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/db.png" width="400"></td>
+    <td><img src="docs/graph.png" width="400"></td>
+    <td><img src="docs/db.png" width="400"></td>
   </tr>
 </table>
