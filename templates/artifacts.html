@@ -56,8 +56,19 @@
         <tr>
             <td>{{ artifact.id }}</td>
             <td class="artifact-name">{{ artifact.name|title if artifact.name else '-' }}</td>
-            <td>{{ artifact.item_type|replace('_', ' ')|title if artifact.item_type else '-' }}</td>
-            <td>{{ artifact.mat|replace('_', ' ')|title if artifact.mat else '-' }}</td>
+            <td class="artifact-type-col">
+                {% set ai = get_artifact_type_info(artifact.item_type) %}
+                {% if ai.img %}<img src="{{ ai.img }}" class="artifact-icon" alt="">{% else %}<span class="artifact-icon-text">{{ ai.icon }}</span>{% endif %}
+                {{ ai.label }}
+            </td>
+            <td>
+                {% if artifact.mat %}
+                    {% set mat_color = get_material_color(artifact.mat) %}
+                    <span {% if mat_color %}style="color: {{ mat_color }}"{% endif %}>{{ artifact.mat|replace('_', ' ')|title }}</span>
+                {% else %}
+                    -
+                {% endif %}
+            </td>
             <td>
                 {% if artifact.creator_name %}
                     {% set ri = get_race_info(artifact.creator_race) %}

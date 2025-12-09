@@ -209,6 +209,239 @@ STRUCTURE_TYPE_DATA = {
 # Structure icons directory
 STRUCTURE_ICONS_DIR = BASE_DIR / "static" / "icons" / "structures"
 
+# Artifact type labels mapping (icon, label)
+ARTIFACT_TYPE_DATA = {
+    'book': ('📖', 'Book'),
+    'tool': ('⚒', 'Tool'),
+    'weapon': ('⚔', 'Weapon'),
+    'earring': ('○', 'Earring'),
+    'totem': ('☠', 'Totem'),
+    'ring': ('○', 'Ring'),
+    'scepter': ('♔', 'Scepter'),
+    'amulet': ('◊', 'Amulet'),
+    'pants': ('▬', 'Pants'),
+    'slab': ('▬', 'Slab'),
+    'figurine': ('♦', 'Figurine'),
+    'shield': ('◘', 'Shield'),
+    'armor': ('☼', 'Armor'),
+    'bracelet': ('○', 'Bracelet'),
+    'crown': ('♔', 'Crown'),
+    'gem': ('◆', 'Gem'),
+    'instrument': ('♪', 'Instrument'),
+    'shoes': ('▬', 'Shoes'),
+    'toy': ('♦', 'Toy'),
+    'helm': ('◘', 'Helm'),
+    'trapcomp': ('☼', 'Trap Component'),
+    'gloves': ('▬', 'Gloves'),
+    'goblet': ('u', 'Goblet'),
+    'weaponrack': ('╦', 'Weapon Rack'),
+    'chain': ('~', 'Chain'),
+    'bin': ('▒', 'Bin'),
+    'cage': ('▒', 'Cage'),
+    'door': ('▬', 'Door'),
+    'armorstand': ('╦', 'Armor Stand'),
+    'box': ('▒', 'Box'),
+    'floodgate': ('▬', 'Floodgate'),
+    'grate': ('▒', 'Grate'),
+    'table': ('▬', 'Table'),
+    'animaltrap': ('▒', 'Animal Trap'),
+    'cabinet': ('▒', 'Cabinet'),
+    'chair': ('▬', 'Chair'),
+    'coffin': ('▒', 'Coffin'),
+    'statue': ('☼', 'Statue'),
+}
+
+# Artifact icons directory
+ARTIFACT_ICONS_DIR = BASE_DIR / "static" / "icons" / "artifacts"
+
+# Material colors - specific materials mapped to colors
+MATERIAL_COLORS = {
+    # Metals - warm metallic colors
+    'copper': '#b87333',
+    'iron': '#a19d94',
+    'steel': '#71797E',
+    'silver': '#c0c0c0',
+    'gold': '#ffd700',
+    'bronze': '#cd7f32',
+    'bismuth bronze': '#cd7f32',
+    'brass': '#b5a642',
+    'platinum': '#e5e4e2',
+    'electrum': '#cfc87c',
+    'aluminum': '#848789',
+    'native aluminum': '#848789',
+    'native silver': '#c0c0c0',
+    'native gold': '#ffd700',
+    'native platinum': '#e5e4e2',
+    'rose gold': '#b76e79',
+    'white gold': '#f5f5dc',
+    'pig iron': '#6e6e6e',
+    'cast iron': '#4a4a4a',
+    'billon': '#9a9a7f',
+    'black bronze': '#4a3728',
+    'lay pewter': '#8a8a8a',
+    'trifle pewter': '#9a9a9a',
+    'fine pewter': '#aaaaaa',
+    'sterling silver': '#bfbfbf',
+    # Gems - vibrant colors
+    'ruby': '#e0115f',
+    'emerald': '#50c878',
+    'sapphire': '#0f52ba',
+    'diamond': '#b9f2ff',
+    'black diamond': '#3b3b3b',
+    'blue diamond': '#4169e1',
+    'red diamond': '#ff3333',
+    'yellow diamond': '#fff44f',
+    'clear diamond': '#f0f8ff',
+    'amethyst': '#9966cc',
+    'topaz': '#ffc87c',
+    'aquamarine': '#7fffd4',
+    'garnet': '#733635',
+    'blue garnet': '#4169e1',
+    'opal': '#a8c3bc',
+    'fire opal': '#e95c20',
+    'precious fire opal': '#ff4500',
+    'black opal': '#1c1c1c',
+    'white opal': '#f5f5f5',
+    'shell opal': '#fff5ee',
+    'wax opal': '#f5deb3',
+    'jasper opal': '#d2691e',
+    'amber opal': '#ffbf00',
+    'bone opal': '#e3dac9',
+    'bandfire opal': '#ff6347',
+    'pearl': '#fdeef4',
+    'jade': '#00a86b',
+    'blue jade': '#4682b4',
+    'alexandrite': '#008b8b',
+    'tanzanite': '#4169e1',
+    'tourmaline': '#86c67c',
+    'spinel': '#ff1493',
+    'zircon': '#f0e68c',
+    'yellow zircon': '#f4c430',
+    'brown zircon': '#8b4513',
+    'black zircon': '#2f2f2f',
+    'peridot': '#e6e200',
+    'citrine': '#e4d00a',
+    'morganite': '#f4a7b9',
+    'almandine': '#7b1113',
+    'pyrope': '#cc0066',
+    'black pyrope': '#330033',
+    'grossular': '#a8d8a8',
+    'cinnamon grossular': '#d2691e',
+    'tsavorite': '#00ff7f',
+    'bloodstone': '#3b5323',
+    # Stone - gray/brown earth tones
+    'granite': '#696969',
+    'marble': '#f5f5f5',
+    'obsidian': '#3d3d3d',
+    'basalt': '#4a4a4a',
+    'sandstone': '#c2b280',
+    'limestone': '#d3c9a1',
+    'slate': '#708090',
+    'shale': '#5d5d5d',
+    'chalk': '#f5f5f5',
+    'diorite': '#808080',
+    'gneiss': '#6b6b6b',
+    'quartzite': '#f5f5f5',
+    'andesite': '#9a9a9a',
+    'phyllite': '#5f5f5f',
+    'mudstone': '#8b7765',
+    'gabbro': '#545454',
+    'rhyolite': '#9b8b7a',
+    'schist': '#6a6a6a',
+    'kimberlite': '#5a5a5a',
+    'puddingstone': '#8b6b5c',
+    # Wood - brown tones
+    'oak wood': '#806517',
+    'pine wood': '#c19a6b',
+    'birch wood': '#f5deb3',
+    'maple wood': '#c04000',
+    'willow wood': '#9acd32',
+    'cedar wood': '#a0522d',
+    'mahogany wood': '#c04000',
+    'ebony wood': '#3d3d3d',
+    # Bone/Ivory - off-white
+    'bone': '#e3dac9',
+    'ivory': '#fffff0',
+    'horn': '#d2b48c',
+    'shell': '#fff5ee',
+    # Leather/Parchment - tan/brown
+    'leather': '#8b4513',
+    # Glass/Ceramic
+    'glass': '#add8e6',
+    'clear glass': '#e0ffff',
+    'green glass': '#98fb98',
+    'crystal glass': '#f0f8ff',
+    'porcelain': '#f5f5f5',
+    # Minerals/Ores
+    'coal': '#2f2f2f',
+    'bituminous coal': '#3d3d3d',
+    'lignite': '#4a3728',
+    'hematite': '#8b0000',
+    'magnetite': '#2f2f2f',
+    'malachite': '#0bda51',
+    'azurite': '#007fff',
+    'galena': '#8a8a8a',
+    'sphalerite': '#c4a35a',
+    'cinnabar': '#e34234',
+    'cobaltite': '#0047ab',
+    'tetrahedrite': '#4a4a4a',
+    'garnierite': '#00a86b',
+    'chromite': '#3d3d3d',
+    'realgar': '#ff4500',
+    'orpiment': '#ffd700',
+    'stibnite': '#6a6a6a',
+    'bismuthinite': '#8a8a8a',
+    'bauxite': '#c04000',
+    # Other minerals
+    'calcite': '#f5f5dc',
+    'gypsum': '#f8f8ff',
+    'alabaster': '#f2f0e6',
+    'saltpeter': '#f5f5f5',
+    'borax': '#f5f5f5',
+    'alunite': '#f0e68c',
+    'satinspar': '#fffaf0',
+    'mica': '#c4aead',
+    'primal salt': '#ffd1dc',
+    'brimstone': '#ffff00',
+    # Creature materials (default tan for parchment)
+}
+
+# Material category patterns for fallback colors
+MATERIAL_CATEGORY_PATTERNS = [
+    ('parchment', '#d4a574'),  # Tan/beige for all parchment
+    ('wood', '#8b5a2b'),       # Brown for wood
+    ('bone', '#e3dac9'),       # Off-white for bone
+    ('leather', '#8b4513'),    # Brown for leather
+    ('silk', '#fffaf0'),       # Off-white for silk
+    ('cloth', '#dcdcdc'),      # Gray for cloth
+    ('wool', '#f5f5dc'),       # Beige for wool
+    ('glaze', '#add8e6'),      # Light blue for glazes
+    ('glass', '#add8e6'),      # Light blue for glass
+    ('opal', '#a8c3bc'),       # Opalescent for opals
+    ('agate', '#b5651d'),      # Brown for agates
+    ('jasper', '#d2691e'),     # Orange-brown for jasper
+]
+
+
+def get_material_color(material):
+    """Get color for a material."""
+    if not material:
+        return None
+
+    mat_lower = material.lower()
+
+    # Check direct mapping first
+    if mat_lower in MATERIAL_COLORS:
+        return MATERIAL_COLORS[mat_lower]
+
+    # Check category patterns
+    for pattern, color in MATERIAL_CATEGORY_PATTERNS:
+        if pattern in mat_lower:
+            return color
+
+    return None
+
+
 # Event type labels mapping (icon, label)
 EVENT_TYPE_DATA = {
     'add_hf_entity_link': ('⚭', 'Joined Entity'),
@@ -237,6 +470,33 @@ EVENT_TYPE_DATA = {
     'war_peace_accepted': ('☮', 'Peace Accepted'),
     'war_peace_rejected': ('⚔', 'Peace Rejected'),
 }
+
+
+def get_artifact_type_info(artifact_type):
+    """Get artifact type label, text icon, and image icon path."""
+    if not artifact_type:
+        return {'label': '-', 'icon': '·', 'img': None}
+
+    icon = '·'
+    label = None
+    img = None
+
+    # Check for image icon
+    for ext in ['.png', '.gif']:
+        icon_path = ARTIFACT_ICONS_DIR / f"{artifact_type}{ext}"
+        if icon_path.exists():
+            img = f'/static/icons/artifacts/{artifact_type}{ext}'
+            break
+
+    # Check direct mapping
+    if artifact_type in ARTIFACT_TYPE_DATA:
+        icon, label = ARTIFACT_TYPE_DATA[artifact_type]
+
+    # Default: title case
+    if label is None:
+        label = artifact_type.replace('_', ' ').title()
+
+    return {'label': label, 'icon': icon, 'img': img}
 
 
 def get_event_type_info(event_type):
@@ -580,6 +840,8 @@ app.jinja_env.filters['site_type_label'] = format_site_type
 app.jinja_env.filters['event_type_label'] = format_event_type
 app.jinja_env.globals['get_race_info'] = get_race_info
 app.jinja_env.globals['get_site_type_info'] = get_site_type_info
+app.jinja_env.globals['get_artifact_type_info'] = get_artifact_type_info
+app.jinja_env.globals['get_material_color'] = get_material_color
 app.jinja_env.globals['get_event_type_info'] = get_event_type_info
 app.jinja_env.globals['format_event_details'] = format_event_details
 
