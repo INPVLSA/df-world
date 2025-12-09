@@ -1467,7 +1467,7 @@ def sites():
     sort_dir = request.args.get('dir', 'asc')
 
     # Validate sort column and direction
-    valid_columns = ['id', 'name', 'type', 'coords', 'settlers']
+    valid_columns = ['id', 'name', 'type', 'settlers']
     if sort_col not in valid_columns:
         sort_col = 'name'
     if sort_dir not in ['asc', 'desc']:
@@ -2133,6 +2133,7 @@ def api_site(site_id):
     # Get historical events at this site (limited)
     events_cursor = db.execute("""
         SELECT he.id, he.year, he.type, he.hfid, he.slayer_hfid, he.extra_data,
+               he.state, he.reason, he.death_cause, he.artifact_id, he.civ_id, he.entity_id,
                hf.name as hf_name, hf.race as hf_race,
                slayer.name as slayer_name, slayer.race as slayer_race
         FROM historical_events he
@@ -2155,6 +2156,12 @@ def api_site(site_id):
             'hf_race': ev_row['hf_race'],
             'slayer_name': ev_row['slayer_name'],
             'slayer_race': ev_row['slayer_race'],
+            'state': ev_row['state'],
+            'reason': ev_row['reason'],
+            'death_cause': ev_row['death_cause'],
+            'artifact_id': ev_row['artifact_id'],
+            'civ_id': ev_row['civ_id'],
+            'entity_id': ev_row['entity_id'],
             'extra_data': ev_row['extra_data']
         }
         events_list.append(ev)
