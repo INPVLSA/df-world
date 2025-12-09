@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DF-World Terrain Map Generator
+DF Tales Terrain Map Generator
 Generates a terrain map image from region coordinate data.
 """
 

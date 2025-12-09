@@ -1,4 +1,4 @@
--- DF-World Master Database Schema
+-- DF Tales Master Database Schema
 -- Tracks all imported worlds
 
 CREATE TABLE IF NOT EXISTS worlds (

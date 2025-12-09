@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "base.html" import pagination with context %}
 
-{% block title %}Historical Figures - DF-World{% endblock %}
+{% block title %}Historical Figures - DF Tales{% endblock %}
 
 {% block content %}
 <h1>Historical Figures</h1>
@@ -11,7 +11,7 @@
     <select id="race-select">
         <option value="">All Races</option>
         {% for r in races %}
-        <option value="{{ r.race }}" {% if race_filter == r.race %}selected{% endif %}>{{ r.race|race_label }}</option>
+        <option value="{{ r.race }}" {% if race_filter == r.race %}selected{% endif %}> {{ r.race|race_label }}</option>
         {% endfor %}
     </select>
     <label class="checkbox-label">
@@ -40,7 +40,7 @@
         <tr class="figure-row" data-figure-id="{{ fig.id }}">
             <td>{{ fig.id }}</td>
             <td><a href="#" class="entity-link" data-type="figure" data-id="{{ fig.id }}">{{ fig.name|title if fig.name else '(unnamed)' }}</a></td>
-            <td class="race-cell">{% set ri = get_race_info(fig.race) %}{% if ri.img %}<img src="{{ ri.img }}" class="race-icon" alt="">{% else %}<span class="race-icon-text">{{ ri.icon }}</span>{% endif %} {{ ri.label }}</td>
+            <td class="race-cell">{% set ri = get_race_info(fig.race, fig.caste) %}{% if ri.img %}<img src="{{ ri.img }}" class="race-icon" alt="">{% else %}<span class="race-icon-text">{{ ri.icon }}</span>{% endif %} {{ ri.label }}</td>
             <td>{% if fig.caste %}{{ fig.caste|title }}{% else %}-{% endif %}</td>
             <td>{{ fig.birth_year if fig.birth_year else '-' }}</td>
             <td>{% if fig.death_year == -1 %}<span class="alive">Alive</span>{% else %}{{ fig.death_year if fig.death_year else '-' }}{% endif %}</td>

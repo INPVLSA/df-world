@@ -46,7 +46,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}DF-World{% endblock %}</title>
+    <title>{% block title %}DF Tales{% endblock %}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='ico.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -54,7 +54,7 @@
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-brand">
-                <a href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='ico.png') }}" alt="" class="nav-icon nav-logo" width="23" height="20">DF-World</a>
+                <a href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='ico.png') }}" alt="" class="nav-icon nav-logo" width="23" height="20">DF Tales</a>
             </div>
             <div class="nav-links">
                 <a href="{{ url_for('figures') }}"><img src="{{ url_for('static', filename='icons/races/DWARF.png') }}" alt="" class="nav-icon">Figures</a>
@@ -111,14 +111,14 @@
         var history = [];
         var MAX_HISTORY = 10;
 
-        function addToHistory(type, id, name, race, siteType) {
+        function addToHistory(type, id, name, race, siteType, raceImg) {
             // Don't add duplicate if same as last item
             if (history.length > 0) {
                 var last = history[history.length - 1];
                 if (last.type === type && last.id == id) return;
             }
 
-            history.push({ type: type, id: id, name: name, race: race, siteType: siteType });
+            history.push({ type: type, id: id, name: name, race: race, siteType: siteType, raceImg: raceImg });
 
             // Limit history size
             if (history.length > MAX_HISTORY) {
@@ -140,7 +140,9 @@
             // Render bottom to top (oldest first in DOM, newest at top visually with flex-direction: column-reverse)
             history.forEach(function(item, idx) {
                 var spriteUrl = '';
-                if (item.type === 'figure' && item.race) {
+                if (item.type === 'figure' && item.raceImg) {
+                    spriteUrl = item.raceImg;
+                } else if (item.type === 'figure' && item.race) {
                     spriteUrl = '/static/icons/races/' + item.race + '.png';
                 } else if (item.type === 'site' && item.siteType) {
                     spriteUrl = '/static/icons/sites/' + item.siteType.replace(/ /g, '_') + '.png';
@@ -405,9 +407,11 @@
             var name, sprite = '';
             if (type === 'figure' && data.figure) {
                 name = data.figure.name;
-                var race = data.figure.race;
-                if (race) {
-                    var imgPath = '/static/icons/races/' + race + '.png';
+                var raceImg = data.figure.race_img;
+                if (raceImg) {
+                    sprite = '<img src="' + raceImg + '" class="modal-title-icon" alt="" onerror="this.style.display=\'none\'">';
+                } else if (data.figure.race) {
+                    var imgPath = '/static/icons/races/' + data.figure.race + '.png';
                     sprite = '<img src="' + imgPath + '" class="modal-title-icon" alt="" onerror="this.style.display=\'none\'">';
                 }
             } else if (type === 'site' && data.site) {
@@ -564,7 +568,9 @@
                         html += '<div class="rel-group-items">';
                         items.forEach(function(rel) {
                             var sprite = '';
-                            if (rel.related_race) {
+                            if (rel.related_race_img) {
+                                sprite = '<img src="' + rel.related_race_img + '" class="event-icon" alt="" onerror="this.style.display=\'none\'">';
+                            } else if (rel.related_race) {
                                 sprite = '<img src="/static/icons/races/' + rel.related_race + '.png" class="event-icon" alt="" onerror="this.style.display=\'none\'">';
                             }
                             var name = rel.related_name ? titleCase(rel.related_name) : 'Figure #' + (rel.source_hf == fig.id ? rel.target_hf : rel.source_hf);
@@ -639,6 +645,24 @@
                     });
                     if (data.structures.length > 10) {
                         html += '<div class="expand-more-btn" data-count="' + (data.structures.length - 10) + '">... and ' + (data.structures.length - 10) + ' more</div>';
+                    }
+                    html += '</div></div>';
+                }
+
+                // Current Settlers (alive figures at site)
+                if (data.settlers && data.settlers.length > 0) {
+                    html += '<div class="entity-section"><div class="entity-section-title">Current Settlers (' + data.settlers.length + ')</div>';
+                    html += '<div class="expandable-list" data-limit="10">';
+                    data.settlers.forEach(function(fig, idx) {
+                        var hiddenClass = idx >= 10 ? ' hidden-item' : '';
+                        var sprite = fig.race_img
+                            ? '<img src="' + fig.race_img + '" class="inline-icon" alt="">'
+                            : '<span class="inline-icon-text">' + (fig.race_icon || '?') + '</span>';
+                        var linkType = fig.link_type ? ' <span class="link-type">(' + fig.link_type.replace(/_/g, ' ') + ')</span>' : '';
+                        html += '<div class="entity-list-item' + hiddenClass + '">' + sprite + '<a href="#" class="entity-link" data-type="figure" data-id="' + fig.id + '">' + titleCase(fig.name) + '</a>' + linkType + '</div>';
+                    });
+                    if (data.settlers.length > 10) {
+                        html += '<div class="expand-more-btn" data-count="' + (data.settlers.length - 10) + '">... and ' + (data.settlers.length - 10) + ' more</div>';
                     }
                     html += '</div></div>';
                 }
@@ -852,13 +876,13 @@
 
                     // Add to history
                     if (type === 'figure' && data.figure) {
-                        addToHistory('figure', id, data.figure.name, data.figure.race, null);
+                        addToHistory('figure', id, data.figure.name, data.figure.race, null, data.figure.race_img);
                     } else if (type === 'site' && data.site) {
-                        addToHistory('site', id, data.site.name, null, data.site.type);
+                        addToHistory('site', id, data.site.name, null, data.site.type, null);
                     } else if (type === 'artifact' && data.artifact) {
-                        addToHistory('artifact', id, data.artifact.name, null, null);
+                        addToHistory('artifact', id, data.artifact.name, null, null, null);
                     } else if (type === 'entity' && data.entity) {
-                        addToHistory('entity', id, data.entity.name, null, null);
+                        addToHistory('entity', id, data.entity.name, null, null, null);
                     }
                 })
                 .catch(function(err) {
@@ -924,7 +948,7 @@
     <footer class="footer">
         <div class="footer-content">
             <div class="footer-brand">
-                <span class="footer-logo">DF-World</span>
+                <span class="footer-logo">DF Tales</span>
                 <span class="footer-tagline">Dwarf Fortress Legends Viewer</span>
             </div>
             <div class="footer-links">

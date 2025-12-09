@@ -1,4 +1,4 @@
--- DF-World SQLite Schema
+-- DF Tales SQLite Schema
 
 -- World info
 CREATE TABLE IF NOT EXISTS world (

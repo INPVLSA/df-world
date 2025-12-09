@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DF-World XML Import Script
+DF Tales XML Import Script
 Imports Dwarf Fortress legends XML data into SQLite database.
 """
 
@@ -269,7 +269,7 @@ def init_world_db(db_path):
 def run_import(legends_path=None, plus_path=None):
     """Main import function."""
     print("=" * 50)
-    print("DF-World XML Import")
+    print("DF Tales XML Import")
     print("=" * 50)
 
     # Find XML files
@@ -725,7 +725,7 @@ def run_import(legends_path=None, plus_path=None):
 def run_merge_plus(world_id, db_path, plus_path):
     """Merge legends_plus.xml data into an existing world database."""
     print("=" * 50)
-    print("DF-World Legends Plus Merge")
+    print("DF Tales Legends Plus Merge")
     print("=" * 50)
 
     plus_file = Path(plus_path)

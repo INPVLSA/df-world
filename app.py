@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DF-World Flask Application
+DF Tales Flask Application
 Web interface for Dwarf Fortress legends data.
 """
 
@@ -789,7 +789,7 @@ def format_site_type(site_type, with_icon=True):
     return info['label']
 
 
-def get_race_info(race):
+def get_race_info(race, caste=None):
     """Get race label, text icon, and image icon path."""
     if not race:
         return {'label': '-', 'icon': '·', 'img': None}
@@ -798,12 +798,30 @@ def get_race_info(race):
     label = None
     img = None
 
-    # Check for image icon (convention: static/icons/races/{RACE_CODE}.png or .gif)
-    for ext in ['.png', '.gif']:
-        icon_path = RACE_ICONS_DIR / f"{race}{ext}"
-        if icon_path.exists():
-            img = f'/static/icons/races/{race}{ext}'
-            break
+    # Check for sex-specific icon based on caste (MALE/FEMALE)
+    if caste:
+        caste_upper = caste.upper() if isinstance(caste, str) else None
+        if caste_upper == 'MALE':
+            sex_suffix = 'M'
+        elif caste_upper == 'FEMALE':
+            sex_suffix = 'F'
+        else:
+            sex_suffix = None
+
+        if sex_suffix:
+            for ext in ['.png', '.gif']:
+                icon_path = RACE_ICONS_DIR / f"{race}_{sex_suffix}{ext}"
+                if icon_path.exists():
+                    img = f'/static/icons/races/{race}_{sex_suffix}{ext}'
+                    break
+
+    # Fall back to generic race icon
+    if img is None:
+        for ext in ['.png', '.gif']:
+            icon_path = RACE_ICONS_DIR / f"{race}{ext}"
+            if icon_path.exists():
+                img = f'/static/icons/races/{race}{ext}'
+                break
 
     # If no exact match, check pattern-based icons
     if img is None:
@@ -856,7 +874,7 @@ def format_race(race, with_icon=True):
     return info['label']
 
 app = Flask(__name__)
-app.secret_key = 'df-world-secret-key'
+app.secret_key = 'df-tales-secret-key'
 
 # Register template filters
 app.jinja_env.filters['race_label'] = format_race
@@ -1333,7 +1351,7 @@ def figures():
         figures_list = []
         for row in figures_data:
             fig = dict(row)
-            race_info = get_race_info(fig.get('race'))
+            race_info = get_race_info(fig.get('race'), fig.get('caste'))
             fig['race_label'] = race_info['label']
             fig['race_icon'] = race_info['icon']
             fig['race_img'] = race_info['img']
@@ -1919,8 +1937,9 @@ def api_figure(figure_id):
         return jsonify({'error': 'Figure not found'}), 404
 
     fig = dict(figure)
-    race_info = get_race_info(fig.get('race'))
+    race_info = get_race_info(fig.get('race'), fig.get('caste'))
     fig['race_label'] = race_info['label']
+    fig['race_img'] = race_info['img']
 
     # Calculate age
     current_year = get_current_year()
@@ -1949,9 +1968,9 @@ def api_figure(figure_id):
     """, [figure_id]).fetchall()
 
     # Get relationships (where this figure is source or target)
-    relationships = db.execute("""
+    relationships_raw = db.execute("""
         SELECT r.*,
-               hf.name as related_name, hf.race as related_race
+               hf.name as related_name, hf.race as related_race, hf.caste as related_caste
         FROM hf_relationships r
         LEFT JOIN historical_figures hf ON (
             CASE WHEN r.source_hf = ? THEN r.target_hf ELSE r.source_hf END
@@ -1959,6 +1978,14 @@ def api_figure(figure_id):
         WHERE r.source_hf = ? OR r.target_hf = ?
         ORDER BY r.relationship, r.year
     """, [figure_id, figure_id, figure_id]).fetchall()
+
+    relationships = []
+    for rel in relationships_raw:
+        r = dict(rel)
+        if r.get('related_race'):
+            race_info = get_race_info(r['related_race'], r.get('related_caste'))
+            r['related_race_img'] = race_info['img']
+        relationships.append(r)
 
     # Get life events (where this figure is involved)
     # hfid is direct column, other figure refs may be in extra_data JSON
@@ -2007,7 +2034,7 @@ def api_figure(figure_id):
         'figure': fig,
         'affiliations': [dict(a) for a in affiliations],
         'site_links': [dict(s) for s in site_links],
-        'relationships': [dict(r) for r in relationships],
+        'relationships': relationships,
         'events': events_list
     })
 
@@ -2051,7 +2078,7 @@ def api_site(site_id):
 
     # Get linked historical figures
     linked_figures = db.execute("""
-        SELECT hf.id, hf.name, hf.race, hsl.link_type
+        SELECT hf.id, hf.name, hf.race, hf.caste, hsl.link_type
         FROM hf_site_links hsl
         JOIN historical_figures hf ON hsl.hfid = hf.id
         WHERE hsl.site_id = ?
@@ -2063,11 +2090,31 @@ def api_site(site_id):
     for row in linked_figures:
         f = dict(row)
         race = f.get('race') or ''
-        race_info = get_race_info(race.upper())
+        race_info = get_race_info(race.upper(), f.get('caste'))
         f['race_icon'] = race_info['icon']
         f['race_img'] = race_info['img']
         f['race_label'] = race_info['label']
         figures_list.append(f)
+
+    # Get current settlers (alive figures linked to this site)
+    settlers = db.execute("""
+        SELECT hf.id, hf.name, hf.race, hf.caste, hsl.link_type
+        FROM hf_site_links hsl
+        JOIN historical_figures hf ON hsl.hfid = hf.id
+        WHERE hsl.site_id = ? AND hf.death_year = -1
+        ORDER BY hf.race, hf.name
+        LIMIT 100
+    """, [site_id]).fetchall()
+
+    settlers_list = []
+    for row in settlers:
+        s = dict(row)
+        race = s.get('race') or ''
+        race_info = get_race_info(race.upper(), s.get('caste'))
+        s['race_icon'] = race_info['icon']
+        s['race_img'] = race_info['img']
+        s['race_label'] = race_info['label']
+        settlers_list.append(s)
 
     # Get artifacts at this site
     artifacts = db.execute("""
@@ -2113,6 +2160,7 @@ def api_site(site_id):
         'site': site_dict,
         'structures': structures_list,
         'linked_figures': figures_list,
+        'settlers': settlers_list,
         'artifacts': artifacts_list,
         'events': events_list
     })
@@ -2166,7 +2214,7 @@ def api_entity(entity_id):
 
     # Get positions with current holders
     positions = db.execute("""
-        SELECT ep.*, epa.histfig_id, hf.name as holder_name, hf.race as holder_race
+        SELECT ep.*, epa.histfig_id, hf.name as holder_name, hf.race as holder_race, hf.caste as holder_caste
         FROM entity_positions ep
         LEFT JOIN entity_position_assignments epa ON ep.entity_id = epa.entity_id AND ep.position_id = epa.position_id
         LEFT JOIN historical_figures hf ON epa.histfig_id = hf.id
@@ -2174,15 +2222,23 @@ def api_entity(entity_id):
         ORDER BY ep.name
     """, [entity_id]).fetchall()
 
+    positions_list = []
+    for p in positions:
+        pos = dict(p)
+        if pos.get('holder_race'):
+            holder_race_info = get_race_info(pos['holder_race'].upper(), pos.get('holder_caste'))
+            pos['holder_race_img'] = holder_race_info['img']
+        positions_list.append(pos)
+
     return jsonify({
         'entity': ent,
-        'positions': [dict(p) for p in positions]
+        'positions': positions_list
     })
 
 
 if __name__ == '__main__':
     print("=" * 50)
-    print("DF-World Server")
+    print("DF Tales Server")
     print("=" * 50)
     print(f"\nData directory: {DATA_DIR}")
     print(f"Master database: {MASTER_DB_PATH}")
