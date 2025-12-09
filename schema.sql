@@ -175,6 +175,7 @@ CREATE TABLE IF NOT EXISTS artifacts (
 );
 CREATE INDEX IF NOT EXISTS idx_artifacts_type ON artifacts(item_type);
 CREATE INDEX IF NOT EXISTS idx_artifacts_creator ON artifacts(creator_hfid);
+CREATE INDEX IF NOT EXISTS idx_artifacts_name ON artifacts(name COLLATE NOCASE);
 
 -- Historical events (polymorphic)
 CREATE TABLE IF NOT EXISTS historical_events (
@@ -209,6 +210,7 @@ CREATE TABLE IF NOT EXISTS written_content (
 );
 CREATE INDEX IF NOT EXISTS idx_wc_type ON written_content(type);
 CREATE INDEX IF NOT EXISTS idx_wc_author ON written_content(author_hfid);
+CREATE INDEX IF NOT EXISTS idx_wc_title ON written_content(title COLLATE NOCASE);
 
 -- Written content styles
 CREATE TABLE IF NOT EXISTS written_content_styles (

@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% from "base.html" import pagination with context %}
+
+{% block title %}Written Content - DF Tales{% endblock %}
+
+{% block content %}
+<h1>Written Content</h1>
+
+<form class="filters" method="get" id="filter-form">
+    <input type="text" name="q" placeholder="Search..." value="{{ search }}" id="search-input">
+    <select name="type" onchange="this.form.submit()">
+        <option value="">All Types</option>
+        {% for t in types %}
+        <option value="{{ t.type }}" {% if type_filter == t.type %}selected{% endif %}>{{ t.type|replace('_', ' ') }}</option>
+        {% endfor %}
+    </select>
+    <a href="{{ url_for('written_content') }}" class="btn btn-clear{% if not search and not type_filter %} disabled{% endif %}">Clear</a>
+</form>
+
+<script>
+(function() {
+    var searchInput = document.getElementById('search-input');
+    var form = document.getElementById('filter-form');
+    var timeout = null;
+
+    searchInput.addEventListener('input', function() {
+        clearTimeout(timeout);
+        timeout = setTimeout(function() {
+            form.submit();
+        }, 400);
+    });
+
+    // Restore cursor position after page reload
+    if (searchInput.value) {
+        searchInput.focus();
+        searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+    }
+})();
+</script>
+
+<p class="results-info">Showing {{ written|length }} of {{ "{:,}".format(total) }} works</p>
+
+<table>
+    <thead>
+        <tr>
+            <th class="sortable{% if sort == 'id' %} sorted {{ dir }}{% endif %}" data-sort="id">ID</th>
+            <th class="sortable{% if sort == 'title' %} sorted {{ dir }}{% endif %}" data-sort="title">Title</th>
+            <th class="sortable{% if sort == 'type' %} sorted {{ dir }}{% endif %}" data-sort="type">Type</th>
+            <th>Author</th>
+            <th>Artifact</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for wc in written %}
+        <tr>
+            <td>{{ wc.id }}</td>
+            <td>{{ wc.title|title if wc.title else '-' }}</td>
+            <td class="type-cell">
+                {% set wt = get_written_type_info(wc.type) %}
+                {% if wt.img %}<img src="{{ wt.img }}" class="type-icon" alt="" onerror="this.style.display='none'">{% endif %}
+                <span{% if wt.color %} style="color: {{ wt.color }}"{% endif %}>{{ wt.label }}</span>
+            </td>
+            <td>
+                {% if wc.author_name %}
+                    {% set ri = get_race_info(wc.author_race) %}
+                    {% if ri.img %}<img src="{{ ri.img }}" class="race-icon" alt="">{% else %}<span class="race-icon-text">{{ ri.icon }}</span>{% endif %}
+                    <a href="#" class="entity-link" data-type="figure" data-id="{{ wc.author_hfid }}">{{ wc.author_name|title }}</a>
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>
+                {% if wc.artifact_id %}
+                    {% set ai = get_artifact_type_info(wc.artifact_type) %}
+                    {% if ai.img %}<img src="{{ ai.img }}" class="artifact-icon" alt="">{% else %}<span class="artifact-icon-text">{{ ai.icon }}</span>{% endif %}
+                    <a href="#" class="entity-link" data-type="artifact" data-id="{{ wc.artifact_id }}">{{ wc.artifact_type|replace('_', ' ')|title if wc.artifact_type else 'Artifact' }}</a>
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{{ pagination(page, total_pages, '?q=' ~ search ~ '&type=' ~ type_filter ~ '&sort=' ~ sort ~ '&dir=' ~ dir) }}
+
+<script>
+(function() {
+    var thead = document.querySelector('table thead');
+    var currentSort = '{{ sort }}';
+    var currentDir = '{{ dir }}';
+
+    thead.addEventListener('click', function(e) {
+        var th = e.target.closest('th.sortable');
+        if (th) {
+            var col = th.dataset.sort;
+            var newDir = 'asc';
+            if (col === currentSort) {
+                newDir = currentDir === 'asc' ? 'desc' : 'asc';
+            }
+            var params = new URLSearchParams(window.location.search);
+            params.set('sort', col);
+            params.set('dir', newDir);
+            params.set('page', '1');
+            window.location.search = params.toString();
+        }
+    });
+})();
+</script>
+{% endblock %}

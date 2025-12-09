@@ -887,6 +887,48 @@ app.jinja_env.globals['get_material_color'] = get_material_color
 app.jinja_env.globals['get_event_type_info'] = get_event_type_info
 app.jinja_env.globals['format_event_details'] = format_event_details
 
+# Written content type colors
+WRITTEN_TYPE_COLORS = {
+    'Poem': '#f0a0f0',           # Pink/lavender
+    'MusicalComposition': '#ffd700',  # Gold
+    'Manual': '#87ceeb',         # Sky blue
+    'Essay': '#98fb98',          # Pale green
+    'Choreography': '#ff69b4',   # Hot pink
+    'Guide': '#20b2aa',          # Light sea green
+    'StarChart': '#e6e6fa',      # Lavender
+    'Novel': '#deb887',          # Burlywood
+    'ShortStory': '#d2b48c',     # Tan
+    'Letter': '#f5f5dc',         # Beige
+    'Chronicle': '#bc8f8f',      # Rosy brown
+    'CulturalComparison': '#8fbc8f',  # Dark sea green
+    'CulturalHistory': '#9acd32',     # Yellow green
+    'Dictionary': '#b0c4de',     # Light steel blue
+    'Biography': '#dda0dd',      # Plum
+    'Autobiography': '#da70d6',  # Orchid
+    'ComparativeBiography': '#ee82ee',  # Violet
+    'Play': '#ffa07a',           # Light salmon
+    'TreatiseOnTechnologicalEvolution': '#40e0d0',  # Turquoise
+    'Dialog': '#f0e68c',         # Khaki
+    'AlternateHistory': '#cd853f',    # Peru
+    'Encyclopedia': '#4682b4',   # Steel blue
+}
+
+def get_written_type_info(wtype):
+    """Get written content type info with color."""
+    if not wtype:
+        return {'label': '-', 'color': None, 'img': None}
+
+    label = wtype.replace('_', ' ')
+    color = WRITTEN_TYPE_COLORS.get(wtype)
+
+    # Check for icon
+    icon_path = Path('static/icons/written') / f"{wtype}.png"
+    img = f'/static/icons/written/{wtype}.png' if icon_path.exists() else None
+
+    return {'label': label, 'color': color, 'img': img}
+
+app.jinja_env.globals['get_written_type_info'] = get_written_type_info
+
 
 def get_master_db():
     """Get master database connection."""
@@ -1912,6 +1954,89 @@ def artifacts():
 
     return render_template('artifacts.html',
                          artifacts=artifacts_data,
+                         page=page,
+                         total=total,
+                         total_pages=total_pages,
+                         per_page=per_page,
+                         search=search,
+                         type_filter=type_filter,
+                         types=types,
+                         sort=sort_col,
+                         dir=sort_dir,
+                         has_plus=has_plus)
+
+
+@app.route('/written')
+def written_content():
+    """List written content."""
+    db = get_db()
+    if not db:
+        flash('Database not found. Run import first.', 'error')
+        return redirect(url_for('index'))
+
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    offset = (page - 1) * per_page
+
+    search = request.args.get('q', '')
+    type_filter = request.args.get('type', '')
+
+    # Sorting
+    sort_col = request.args.get('sort', 'title')
+    sort_dir = request.args.get('dir', 'asc')
+
+    valid_columns = ['id', 'title', 'type']
+    if sort_col not in valid_columns:
+        sort_col = 'title'
+    if sort_dir not in ['asc', 'desc']:
+        sort_dir = 'asc'
+
+    query = """SELECT wc.*,
+               hf.name as author_name,
+               hf.race as author_race,
+               a.id as artifact_id,
+               a.item_type as artifact_type
+               FROM written_content wc
+               LEFT JOIN historical_figures hf ON wc.author_hfid = hf.id
+               LEFT JOIN artifacts a ON a.name = wc.title COLLATE NOCASE
+               WHERE 1=1"""
+    count_query = "SELECT COUNT(*) FROM written_content WHERE 1=1"
+    params = []
+    count_params = []
+
+    if search:
+        query += " AND wc.title LIKE ?"
+        count_query += " AND title LIKE ?"
+        params.append(f'%{search}%')
+        count_params.append(f'%{search}%')
+
+    if type_filter:
+        query += " AND wc.type = ?"
+        count_query += " AND type = ?"
+        params.append(type_filter)
+        count_params.append(type_filter)
+
+    # Handle NULL sorting
+    if sort_dir == 'asc':
+        query += f" ORDER BY wc.{sort_col} IS NULL, wc.{sort_col} ASC"
+    else:
+        query += f" ORDER BY wc.{sort_col} IS NOT NULL, wc.{sort_col} DESC"
+
+    query += " LIMIT ? OFFSET ?"
+    params.extend([per_page, offset])
+
+    written_data = db.execute(query, params).fetchall()
+    total = db.execute(count_query, count_params).fetchone()[0]
+    total_pages = (total + per_page - 1) // per_page
+
+    # Get unique types for filter
+    types = db.execute("SELECT DISTINCT type FROM written_content WHERE type IS NOT NULL ORDER BY type").fetchall()
+
+    current_world = get_current_world()
+    has_plus = current_world and current_world.get('has_plus')
+
+    return render_template('written.html',
+                         written=written_data,
                          page=page,
                          total=total,
                          total_pages=total_pages,
