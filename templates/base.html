@@ -213,6 +213,16 @@
             return sprite + '<a href="#" class="entity-link" data-type="site" data-id="' + siteId + '">' + name + '</a>';
         }
 
+        // Render an artifact link with sprite icon
+        function renderArtifactLink(artifactId, artifactName, artifactType) {
+            var sprite = '';
+            if (artifactType) {
+                sprite = '<img src="/static/icons/artifacts/' + artifactType + '.png" class="inline-icon" alt="" onerror="this.style.display=\'none\'">';
+            }
+            var name = artifactName ? titleCase(artifactName) : 'Artifact #' + artifactId;
+            return sprite + '<a href="#" class="entity-link" data-type="artifact" data-id="' + artifactId + '">' + name + '</a>';
+        }
+
         // Event state icons mapping
         var EVENT_STATE_ICONS = {
             'refugee': '/static/icons/events/refugee.png',
@@ -402,7 +412,7 @@
             if (type === 'artifact_created') {
                 var artifactId = ev.artifact_id || extra.artifact_id;
                 if (artifactId) {
-                    parts.unshift('created <a href="#" class="entity-link" data-type="artifact" data-id="' + artifactId + '">artifact #' + artifactId + '</a>');
+                    parts.unshift('created ' + renderArtifactLink(artifactId, ev.artifact_name, ev.artifact_type));
                 }
             }
 
@@ -696,9 +706,7 @@
                     html += '<div class="expandable-list" data-limit="5">';
                     data.artifacts.forEach(function(art, idx) {
                         var hiddenClass = idx >= 5 ? ' hidden-item' : '';
-                        var artType = art.item_type || '';
-                        var artSprite = artType ? '<img src="/static/icons/artifacts/' + artType + '.png" class="artifact-icon" alt="" onerror="this.style.display=\'none\'">' : '';
-                        html += '<div class="entity-list-item' + hiddenClass + '">' + artSprite + '<a href="#" class="entity-link" data-type="artifact" data-id="' + art.id + '">' + titleCase(art.name) + '</a></div>';
+                        html += '<div class="entity-list-item' + hiddenClass + '">' + renderArtifactLink(art.id, art.name, art.item_type) + '</div>';
                     });
                     if (data.artifacts.length > 5) {
                         html += '<div class="expand-more-btn" data-count="' + (data.artifacts.length - 5) + '">... and ' + (data.artifacts.length - 5) + ' more</div>';

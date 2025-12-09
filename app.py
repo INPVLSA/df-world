@@ -2031,6 +2031,13 @@ def api_figure(figure_id):
                         ev_dict['victim_race'] = victim['race']
             except:
                 pass
+        # Get artifact name/type for artifact_created events
+        artifact_id = ev_dict.get('artifact_id')
+        if artifact_id:
+            artifact = db.execute("SELECT name, item_type FROM artifacts WHERE id = ?", [artifact_id]).fetchone()
+            if artifact:
+                ev_dict['artifact_name'] = artifact['name']
+                ev_dict['artifact_type'] = artifact['item_type']
         events_list.append(ev_dict)
 
     return jsonify({
@@ -2164,6 +2171,12 @@ def api_site(site_id):
             'entity_id': ev_row['entity_id'],
             'extra_data': ev_row['extra_data']
         }
+        # Get artifact name/type for artifact events
+        if ev['artifact_id']:
+            artifact = db.execute("SELECT name, item_type FROM artifacts WHERE id = ?", [ev['artifact_id']]).fetchone()
+            if artifact:
+                ev['artifact_name'] = artifact['name']
+                ev['artifact_type'] = artifact['item_type']
         events_list.append(ev)
 
     return jsonify({
