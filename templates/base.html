@@ -419,7 +419,12 @@
                 }
             } else if (type === 'artifact' && data.artifact) {
                 name = data.artifact.name;
-                sprite = '<img src="/static/icons/artifact.png" class="modal-title-icon" alt="" onerror="this.style.display=\'none\'">';
+                var artType = data.artifact.item_type;
+                if (artType) {
+                    sprite = '<img src="/static/icons/artifacts/' + artType + '.png" class="modal-title-icon" alt="" onerror="this.src=\'/static/icons/artifact.png\'">';
+                } else {
+                    sprite = '<img src="/static/icons/artifact.png" class="modal-title-icon" alt="" onerror="this.style.display=\'none\'">';
+                }
             } else if (type === 'entity' && data.entity) {
                 name = data.entity.name;
                 // If no name, build a fallback from race + type
@@ -662,10 +667,9 @@
                     html += '<div class="expandable-list" data-limit="5">';
                     data.artifacts.forEach(function(art, idx) {
                         var hiddenClass = idx >= 5 ? ' hidden-item' : '';
-                        var artType = art.item_type ? art.item_type.replace(/_/g, ' ') : '';
-                        html += '<div class="entity-list-item' + hiddenClass + '"><a href="#" class="entity-link" data-type="artifact" data-id="' + art.id + '">' + titleCase(art.name) + '</a>';
-                        if (artType) html += ' <span class="item-type">(' + artType + ')</span>';
-                        html += '</div>';
+                        var artType = art.item_type || '';
+                        var artSprite = artType ? '<img src="/static/icons/artifacts/' + artType + '.png" class="artifact-icon" alt="" onerror="this.style.display=\'none\'">' : '';
+                        html += '<div class="entity-list-item' + hiddenClass + '">' + artSprite + '<a href="#" class="entity-link" data-type="artifact" data-id="' + art.id + '">' + titleCase(art.name) + '</a></div>';
                     });
                     if (data.artifacts.length > 5) {
                         html += '<div class="expand-more-btn" data-count="' + (data.artifacts.length - 5) + '">... and ' + (data.artifacts.length - 5) + ' more</div>';

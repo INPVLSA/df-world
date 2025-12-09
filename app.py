@@ -805,6 +805,17 @@ def get_race_info(race):
             img = f'/static/icons/races/{race}{ext}'
             break
 
+    # If no exact match, check pattern-based icons
+    if img is None:
+        for pattern in RACE_PATTERNS.keys():
+            if race.startswith(pattern):
+                for ext in ['.png', '.gif']:
+                    icon_path = RACE_ICONS_DIR / f"{pattern}{ext}"
+                    if icon_path.exists():
+                        img = f'/static/icons/races/{pattern}{ext}'
+                        break
+                break
+
     # Check direct mapping
     if race in RACE_DATA:
         icon, label = RACE_DATA[race]
