@@ -1480,9 +1480,9 @@ a:hover {
 }
 
 .map-btn.active {
-    background: #0f0;
+    background: #0c0;
     color: #000;
-    border-color: #0f0;
+    border-color: #0c0;
 }
 
 .legend-items {

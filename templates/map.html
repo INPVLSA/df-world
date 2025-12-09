@@ -10,11 +10,11 @@
         <button id="zoom-in" class="map-btn" title="Zoom In">+</button>
         <button id="zoom-out" class="map-btn" title="Zoom Out">-</button>
         <button id="zoom-reset" class="map-btn" title="Reset">R</button>
-        <button id="legend-toggle" class="map-btn" title="Toggle Legend">&#9776;</button>
+        <button id="legend-toggle" class="map-btn active" title="Toggle Legend">&#9776;</button>
         <span class="map-info">{{ total_sites }} sites, {{ total_peaks }} peaks</span>
     </div>
 
-    <div class="map-legend-dropdown" id="map-legend">
+    <div class="map-legend-dropdown open" id="map-legend">
         <div class="legend-tabs">
             <button class="legend-tab active" data-tab="sites">Sites</button>
             <button class="legend-tab" data-tab="peaks">Peaks</button>
