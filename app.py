@@ -1706,7 +1706,8 @@ def world_map():
                          total_sites=len(sites_list),
                          total_peaks=len(peaks_list),
                          has_map=has_map,
-                         world_id=world_id)
+                         world_id=world_id,
+                         world=current_world)
 
 
 @app.route('/map/search')

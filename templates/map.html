@@ -3,7 +3,7 @@
 {% block title %}World Map - DF Tales{% endblock %}
 
 {% block content %}
-<h1>World Map</h1>
+<h1>{% if world and world.has_plus and world.name %}{{ world.name|title }} Map{% else %}World Map{% endif %}</h1>
 
 <div class="map-container">
     <div class="map-controls">
