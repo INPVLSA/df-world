@@ -1517,17 +1517,17 @@ a:hover {
 }
 
 .marker-icon {
-    width: 8px;
-    height: 8px;
+    width: 4px;
+    height: 4px;
     image-rendering: pixelated;
     display: block;
 }
 
 .marker-text {
     font-family: 'Courier New', monospace;
-    font-size: 14px;
+    font-size: 7px;
     font-weight: bold;
-    text-shadow: 0 0 3px #000, 1px 1px 0 #000;
+    text-shadow: 0 0 2px #000, 1px 1px 0 #000;
 }
 
 /* Site type marker colors */
