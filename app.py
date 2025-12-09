@@ -2337,8 +2337,21 @@ def api_artifact(artifact_id):
     if not artifact:
         return jsonify({'error': 'Artifact not found'}), 404
 
+    art_dict = dict(artifact)
+
+    # Get written content contained in this artifact (for books/scrolls)
+    written_contents = db.execute("""
+        SELECT wc.id, wc.title, wc.type
+        FROM written_content wc
+        WHERE wc.title = ? COLLATE NOCASE
+        ORDER BY wc.page_start
+    """, [art_dict.get('name')]).fetchall()
+
+    written_list = [dict(wc) for wc in written_contents]
+
     return jsonify({
-        'artifact': dict(artifact)
+        'artifact': art_dict,
+        'written_contents': written_list
     })
 
 
@@ -2382,6 +2395,107 @@ def api_entity(entity_id):
     return jsonify({
         'entity': ent,
         'positions': positions_list
+    })
+
+
+@app.route('/api/written/<int:written_id>')
+def api_written(written_id):
+    """Get written content details for modal."""
+    db = get_db()
+    if not db:
+        return jsonify({'error': 'Database not found'}), 404
+
+    written = db.execute("""
+        SELECT wc.*,
+               hf.name as author_name, hf.race as author_race, hf.caste as author_caste
+        FROM written_content wc
+        LEFT JOIN historical_figures hf ON wc.author_hfid = hf.id
+        WHERE wc.id = ?
+    """, [written_id]).fetchone()
+
+    if not written:
+        return jsonify({'error': 'Written content not found'}), 404
+
+    wc = dict(written)
+
+    # Get author race info
+    if wc.get('author_race'):
+        author_race_info = get_race_info(wc['author_race'], wc.get('author_caste'))
+        wc['author_race_label'] = author_race_info['label']
+        wc['author_race_img'] = author_race_info['img']
+
+    # Get written content type info
+    type_info = get_written_type_info(wc.get('type'))
+    wc['type_label'] = type_info['label']
+    wc['type_img'] = type_info.get('img')
+    wc['type_color'] = type_info.get('color')
+
+    # Get styles
+    styles = db.execute("""
+        SELECT style FROM written_content_styles WHERE written_content_id = ?
+    """, [written_id]).fetchall()
+    wc['styles'] = [s['style'] for s in styles]
+
+    # Get references - resolve them to actual entities
+    references_raw = db.execute("""
+        SELECT ref_type, ref_id FROM written_content_references WHERE written_content_id = ?
+    """, [written_id]).fetchall()
+
+    references = []
+    for ref in references_raw:
+        ref_data = {'type': ref['ref_type'], 'id': ref['ref_id']}
+
+        if ref['ref_type'] == 'historical_figure':
+            fig = db.execute("""
+                SELECT id, name, race, caste FROM historical_figures WHERE id = ?
+            """, [ref['ref_id']]).fetchone()
+            if fig:
+                ref_data['name'] = fig['name']
+                ref_data['entity_type'] = 'figure'
+                race_info = get_race_info(fig['race'], fig['caste'])
+                ref_data['race_img'] = race_info['img']
+        elif ref['ref_type'] == 'site':
+            site = db.execute("""
+                SELECT id, name, type FROM sites WHERE id = ?
+            """, [ref['ref_id']]).fetchone()
+            if site:
+                ref_data['name'] = site['name']
+                ref_data['entity_type'] = 'site'
+                ref_data['site_type'] = site['type']
+        elif ref['ref_type'] == 'entity':
+            entity = db.execute("""
+                SELECT id, name, type, race FROM entities WHERE id = ?
+            """, [ref['ref_id']]).fetchone()
+            if entity:
+                ref_data['name'] = entity['name']
+                ref_data['entity_type'] = 'entity'
+                ref_data['entity_subtype'] = entity['type']
+        elif ref['ref_type'] == 'artifact':
+            artifact = db.execute("""
+                SELECT id, name, item_type FROM artifacts WHERE id = ?
+            """, [ref['ref_id']]).fetchone()
+            if artifact:
+                ref_data['name'] = artifact['name']
+                ref_data['entity_type'] = 'artifact'
+                ref_data['item_type'] = artifact['item_type']
+
+        references.append(ref_data)
+
+    # Find associated artifact (book/scroll containing this content)
+    artifact = db.execute("""
+        SELECT a.id, a.name, a.item_type, a.mat
+        FROM artifacts a
+        WHERE a.name = ? COLLATE NOCASE
+    """, [wc.get('title')]).fetchone()
+
+    artifact_data = None
+    if artifact:
+        artifact_data = dict(artifact)
+
+    return jsonify({
+        'written': wc,
+        'references': references,
+        'artifact': artifact_data
     })
 
 

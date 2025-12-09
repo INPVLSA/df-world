@@ -148,6 +148,10 @@
                     spriteUrl = '/static/icons/races/' + item.race + '.png';
                 } else if (item.type === 'site' && item.siteType) {
                     spriteUrl = '/static/icons/sites/' + item.siteType.replace(/ /g, '_') + '.png';
+                } else if (item.type === 'written') {
+                    spriteUrl = '/static/icons/artifacts/book.png';
+                } else if (item.type === 'artifact') {
+                    spriteUrl = '/static/icons/artifact.png';
                 }
 
                 var isActive = idx === history.length - 1;
@@ -223,6 +227,17 @@
             }
             var name = artifactName ? titleCase(artifactName) : 'Artifact #' + artifactId;
             return sprite + '<a href="#" class="entity-link" data-type="artifact" data-id="' + artifactId + '">' + name + '</a>';
+        }
+
+        // Render a written content link with sprite icon
+        function renderWrittenLink(writtenId, writtenTitle, writtenType) {
+            var sprite = '<img src="/static/icons/artifacts/book.png" class="inline-icon" alt="" onerror="this.style.display=\'none\'">';
+            if (writtenType) {
+                var typeIcon = '/static/icons/written/' + writtenType + '.png';
+                sprite = '<img src="' + typeIcon + '" class="inline-icon" alt="" onerror="this.src=\'/static/icons/artifacts/book.png\'">';
+            }
+            var name = writtenTitle ? titleCase(writtenTitle) : 'Written Content #' + writtenId;
+            return sprite + '<a href="#" class="entity-link" data-type="written" data-id="' + writtenId + '">' + name + '</a>';
         }
 
         // Event state icons mapping
@@ -473,6 +488,14 @@
                         var imgPath = '/static/icons/races/' + race.toUpperCase() + '.png';
                         sprite = '<img src="' + imgPath + '" class="modal-title-icon" alt="" onerror="this.style.display=\'none\'">';
                     }
+                }
+            } else if (type === 'written' && data.written) {
+                name = data.written.title;
+                var wcType = data.written.type;
+                if (data.written.type_img) {
+                    sprite = '<img src="' + data.written.type_img + '" class="modal-title-icon" alt="" onerror="this.src=\'/static/icons/artifacts/book.png\'">';
+                } else {
+                    sprite = '<img src="/static/icons/artifacts/book.png" class="modal-title-icon" alt="" onerror="this.style.display=\'none\'">';
                 }
             }
             if (name) {
@@ -780,6 +803,20 @@
                     html += '<a href="#" class="entity-link" data-type="figure" data-id="' + art.holder_hfid + '">' + titleCase(art.holder_name) + '</a></div>';
                 }
 
+                // Written contents (for books/scrolls)
+                if (data.written_contents && data.written_contents.length > 0) {
+                    html += '<div class="entity-section"><div class="entity-section-title">Contains (' + data.written_contents.length + ')</div>';
+                    html += '<div class="expandable-list" data-limit="5">';
+                    data.written_contents.forEach(function(wc, idx) {
+                        var hiddenClass = idx >= 5 ? ' hidden-item' : '';
+                        html += '<div class="entity-list-item' + hiddenClass + '">' + renderWrittenLink(wc.id, wc.title, wc.type) + '</div>';
+                    });
+                    if (data.written_contents.length > 5) {
+                        html += '<div class="expand-more-btn" data-count="' + (data.written_contents.length - 5) + '">... and ' + (data.written_contents.length - 5) + ' more</div>';
+                    }
+                    html += '</div></div>';
+                }
+
                 html += '</div>';
                 html += '<div class="modal-footer"><a href="/artifacts?q=' + encodeURIComponent(art.name || '') + '" class="btn btn-sm">View in List</a></div>';
                 return html;
@@ -854,6 +891,80 @@
 
                 html += '</div>';
                 return html;
+            },
+
+            written: function(data) {
+                var wc = data.written;
+                var html = '<div class="entity-details">';
+
+                // Type with color
+                var typeLabel = (wc.type_label || wc.type || '-').replace(/_/g, ' ');
+                var typeStyle = wc.type_color ? ' style="color: ' + wc.type_color + '"' : '';
+                html += '<div class="entity-row"><span class="entity-label">Type:</span> <span' + typeStyle + '>' + typeLabel + '</span></div>';
+
+                // Author
+                if (wc.author_name) {
+                    var authorSprite = '';
+                    if (wc.author_race_img) {
+                        authorSprite = '<img src="' + wc.author_race_img + '" class="inline-icon" alt="" onerror="this.style.display=\'none\'">';
+                    }
+                    html += '<div class="entity-row"><span class="entity-label">Author:</span> ' + authorSprite + '<a href="#" class="entity-link" data-type="figure" data-id="' + wc.author_hfid + '">' + titleCase(wc.author_name) + '</a></div>';
+                }
+
+                // Page range
+                if (wc.page_start != null && wc.page_end != null) {
+                    if (wc.page_start === wc.page_end) {
+                        html += '<div class="entity-row"><span class="entity-label">Page:</span> ' + wc.page_start + '</div>';
+                    } else {
+                        html += '<div class="entity-row"><span class="entity-label">Pages:</span> ' + wc.page_start + ' - ' + wc.page_end + '</div>';
+                    }
+                }
+
+                // Styles
+                if (wc.styles && wc.styles.length > 0) {
+                    var stylesFormatted = wc.styles.map(function(s) {
+                        return s.replace(/_/g, ' ');
+                    }).join(', ');
+                    html += '<div class="entity-row"><span class="entity-label">Style:</span> ' + stylesFormatted + '</div>';
+                }
+
+                // Associated artifact
+                if (data.artifact) {
+                    html += '<div class="entity-row"><span class="entity-label">Artifact:</span> ' + renderArtifactLink(data.artifact.id, data.artifact.name, data.artifact.item_type) + '</div>';
+                }
+
+                // References
+                if (data.references && data.references.length > 0) {
+                    html += '<div class="entity-section"><div class="entity-section-title">References (' + data.references.length + ')</div>';
+                    html += '<div class="expandable-list" data-limit="10">';
+
+                    data.references.forEach(function(ref, idx) {
+                        var hiddenClass = idx >= 10 ? ' hidden-item' : '';
+                        var refName = ref.name ? titleCase(ref.name) : (ref.type.replace(/_/g, ' ') + ' #' + ref.id);
+                        var sprite = '';
+                        var linkType = ref.entity_type || 'figure';
+
+                        if (ref.entity_type === 'figure' && ref.race_img) {
+                            sprite = '<img src="' + ref.race_img + '" class="inline-icon" alt="" onerror="this.style.display=\'none\'">';
+                        } else if (ref.entity_type === 'site' && ref.site_type) {
+                            sprite = '<img src="/static/icons/sites/' + ref.site_type.replace(/ /g, '_') + '.png" class="inline-icon" alt="" onerror="this.style.display=\'none\'">';
+                        } else if (ref.entity_type === 'artifact' && ref.item_type) {
+                            sprite = '<img src="/static/icons/artifacts/' + ref.item_type + '.png" class="inline-icon" alt="" onerror="this.style.display=\'none\'">';
+                        }
+
+                        var refTypeLabel = ref.type.replace(/_/g, ' ').replace('historical figure', 'figure');
+                        html += '<div class="entity-list-item' + hiddenClass + '"><span class="link-type">' + refTypeLabel + ':</span> ' + sprite + '<a href="#" class="entity-link" data-type="' + linkType + '" data-id="' + ref.id + '">' + refName + '</a></div>';
+                    });
+
+                    if (data.references.length > 10) {
+                        html += '<div class="expand-more-btn" data-count="' + (data.references.length - 10) + '">... and ' + (data.references.length - 10) + ' more</div>';
+                    }
+                    html += '</div></div>';
+                }
+
+                html += '</div>';
+                html += '<div class="modal-footer"><a href="/written?q=' + encodeURIComponent(wc.title || '') + '" class="btn btn-sm">View in List</a></div>';
+                return html;
             }
         };
 
@@ -862,7 +973,8 @@
                 figure: '/api/figure/',
                 site: '/api/site/',
                 artifact: '/api/artifact/',
-                entity: '/api/entity/'
+                entity: '/api/entity/',
+                written: '/api/written/'
             };
 
             var endpoint = endpoints[type];
@@ -898,6 +1010,8 @@
                         addToHistory('artifact', id, data.artifact.name, null, null, null);
                     } else if (type === 'entity' && data.entity) {
                         addToHistory('entity', id, data.entity.name, null, null, null);
+                    } else if (type === 'written' && data.written) {
+                        addToHistory('written', id, data.written.title, null, null, null);
                     }
                 })
                 .catch(function(err) {

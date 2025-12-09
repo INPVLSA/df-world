@@ -54,7 +54,13 @@
         {% for wc in written %}
         <tr>
             <td>{{ wc.id }}</td>
-            <td>{{ wc.title|title if wc.title else '-' }}</td>
+            <td>
+                {% if wc.title %}
+                    <a href="#" class="entity-link" data-type="written" data-id="{{ wc.id }}">{{ wc.title|title }}</a>
+                {% else %}
+                    -
+                {% endif %}
+            </td>
             <td class="type-cell">
                 {% set wt = get_written_type_info(wc.type) %}
                 {% if wt.img %}<img src="{{ wt.img }}" class="type-icon" alt="" onerror="this.style.display='none'">{% endif %}
