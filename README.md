@@ -61,19 +61,14 @@ cd df-world
 python3 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-### 3. Import Your World
-
-Start the server and use the web interface to upload your XML files:
-
-```bash
 python app.py
 ```
 
-Open http://localhost:5001 and drag & drop your XML files to import.
+Open http://localhost:5001
 
-You can also import via command line:
+### 3. Import Your World
+
+Drag & drop your XML files into the web interface, or import via command line:
 
 ```bash
 python build.py legends.xml [legends_plus.xml]
