@@ -1,6 +1,10 @@
-![fig.png](docs/fig.png)
+<center><img alt="ico.png" height="50" src="static/ico.png"/>&nbsp;&nbsp;&nbsp;&nbsp;<img alt="title.png" height="50" src="docs/title.png"/></center>
 
 A web interface for exploring your Dwarf Fortress world history.
+
+
+![fig.png](docs/fig.png)
+
 
 ## Features
 
@@ -17,28 +21,33 @@ A web interface for exploring your Dwarf Fortress world history.
 
 ### 1. Export Your World Data
 
-**Option A: With DFHack (recommended)**
-In Dwarf Fortress with [DFHack](https://dfhack.org/):
-1. Enter Legends mode (see below)
-2. Press the export button (DFHack adds this automatically)
+#### With DFHack (Recommended)
 
-This creates `*-legends.xml` and `*-legends_plus.xml` with full data.
+[DFHack](https://dfhack.org/) provides extended data including structures, entities, relationships, and artifact details.
 
-**Option B: Vanilla DF**
-In Legends mode, export your world data to get `*-legends.xml`.
+**From a new world or after world generation:**
+1. Main Menu → **Legends** → Select your world
+2. Click **Export XML** (DFHack adds a toggle for extended data - enable it)
+3. Both `*-legends.xml` and `*-legends_plus.xml` are created
+
+**From an active fortress/adventure game:**
+
+⚠️ **Warning:** This is a ONE WAY TRIP - save your game first!
+
+1. **Save your game** (you cannot safely return to fort/adventure mode)
+2. Open DFHack console (press `` ` ``)
+3. Run: `open-legends`
+4. Confirm the save reminder dialog
+5. Click **Export XML** with DFHack toggle enabled
+
+See [DFHack exportlegends documentation](https://docs.dfhack.org/en/stable/docs/tools/exportlegends.html) for more options.
+
+#### Without DFHack (Vanilla)
+
+1. Main Menu → **Legends** → Select your world
+2. Click **Export XML**
 
 Note: Without DFHack, some features are limited (no structures, entities, relationships, artifact details, or written content).
-
-#### How to Access Legends Mode
-
-**Classic DF:** Main Menu → Legends
-
-**Steam DF:**
-1. Save and exit your current game
-2. Main Menu → **Start Playing** → Select your world
-3. Choose **Legends** mode instead of Continue/Fortress/Adventure
-
-**If Legends doesn't appear:** Your world needs generated history. Create a new world or let your current game run for a while.
 
 ### 2. Install & Run
 
