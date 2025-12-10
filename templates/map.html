@@ -16,6 +16,7 @@
             <div class="map-search-results" id="map-search-results"></div>
         </div>
         <span class="map-info">{{ total_sites }} sites, {{ total_peaks }} peaks</span>
+        <span class="map-coords" id="map-coords"></span>
     </div>
 
     <div class="map-legend-dropdown open" id="map-legend">
@@ -126,6 +127,13 @@
     </div>
 
     <div class="map-tooltip" id="map-tooltip"></div>
+
+    {% if has_map %}
+    <div class="mini-map" id="mini-map">
+        <img src="{{ url_for('worlds.world_map_image', world_id=world_id) }}" alt="Mini-map" class="mini-map-img">
+        <div class="mini-map-viewport" id="mini-map-viewport"></div>
+    </div>
+    {% endif %}
 </div>
 
 <script>
@@ -342,6 +350,39 @@
     document.addEventListener('mouseup', function() {
         isDragging = false;
         viewport.style.cursor = 'grab';
+    });
+
+    // Coordinate display on hover
+    var coordsDisplay = document.getElementById('map-coords');
+
+    function updateCoords(e) {
+        var rect = viewport.getBoundingClientRect();
+        var mouseX = e.clientX - rect.left;
+        var mouseY = e.clientY - rect.top;
+
+        // Convert mouse position to canvas position (accounting for pan and scale)
+        var canvasCenterX = rect.width / 2;
+        var canvasCenterY = rect.height / 2;
+        var canvasX = (mouseX - canvasCenterX - panX) / scale + canvasCenterX;
+        var canvasY = (mouseY - canvasCenterY - panY) / scale + canvasCenterY;
+
+        // Convert canvas position to world coordinates
+        var worldX = Math.floor((canvasX / rect.width) * mapWidth + minX);
+        var worldY = Math.floor((canvasY / rect.height) * mapHeight + minY);
+
+        // Check if within bounds
+        if (worldX >= minX && worldX < minX + mapWidth && worldY >= minY && worldY < minY + mapHeight) {
+            coordsDisplay.textContent = 'X: ' + worldX + ', Y: ' + worldY;
+            coordsDisplay.style.display = '';
+        } else {
+            coordsDisplay.style.display = 'none';
+        }
+    }
+
+    viewport.addEventListener('mousemove', updateCoords);
+
+    viewport.addEventListener('mouseleave', function() {
+        coordsDisplay.style.display = 'none';
     });
 
     // Site marker tooltips
@@ -659,6 +700,71 @@
     window.addEventListener('resize', function() {
         resizeOverlayCanvas();
     });
+
+    // === Mini-map ===
+    var miniMap = document.getElementById('mini-map');
+    var miniMapViewport = document.getElementById('mini-map-viewport');
+
+    if (miniMap && miniMapViewport) {
+        // Update mini-map viewport indicator
+        function updateMiniMap() {
+            var viewportRect = viewport.getBoundingClientRect();
+
+            // Calculate visible area in canvas coordinates
+            var canvasCenterX = viewportRect.width / 2;
+            var canvasCenterY = viewportRect.height / 2;
+
+            // Visible rect corners in unscaled canvas coordinates
+            var visLeft = (0 - canvasCenterX - panX) / scale + canvasCenterX;
+            var visTop = (0 - canvasCenterY - panY) / scale + canvasCenterY;
+            var visRight = (viewportRect.width - canvasCenterX - panX) / scale + canvasCenterX;
+            var visBottom = (viewportRect.height - canvasCenterY - panY) / scale + canvasCenterY;
+
+            // Convert to percentages of the full map
+            var leftPct = Math.max(0, (visLeft / viewportRect.width) * 100);
+            var topPct = Math.max(0, (visTop / viewportRect.height) * 100);
+            var widthPct = Math.min(100 - leftPct, ((visRight - visLeft) / viewportRect.width) * 100);
+            var heightPct = Math.min(100 - topPct, ((visBottom - visTop) / viewportRect.height) * 100);
+
+            miniMapViewport.style.left = leftPct + '%';
+            miniMapViewport.style.top = topPct + '%';
+            miniMapViewport.style.width = widthPct + '%';
+            miniMapViewport.style.height = heightPct + '%';
+
+            // Show mini-map only when zoomed in
+            if (scale > 1.2) {
+                miniMap.classList.add('visible');
+            } else {
+                miniMap.classList.remove('visible');
+            }
+        }
+
+        // Update on transform changes
+        var originalUpdateTransform = updateTransform;
+        updateTransform = function() {
+            originalUpdateTransform();
+            updateMiniMap();
+        };
+
+        // Click on mini-map to navigate
+        miniMap.addEventListener('click', function(e) {
+            var rect = miniMap.getBoundingClientRect();
+            var clickX = (e.clientX - rect.left) / rect.width;
+            var clickY = (e.clientY - rect.top) / rect.height;
+
+            // Navigate to clicked position (center it in viewport)
+            var viewportRect = viewport.getBoundingClientRect();
+            var targetX = (clickX - 0.5) * viewportRect.width;
+            var targetY = (clickY - 0.5) * viewportRect.height;
+
+            panX = -targetX * scale;
+            panY = -targetY * scale;
+            updateTransform();
+        });
+
+        // Initial update
+        updateMiniMap();
+    }
 })();
 </script>
 {% endblock %}

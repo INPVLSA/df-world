@@ -1372,6 +1372,14 @@ a:hover {
     font-size: 12px;
 }
 
+.map-coords {
+    color: #4a9;
+    font-size: 12px;
+    font-family: 'Courier New', monospace;
+    margin-left: 12px;
+    min-width: 100px;
+}
+
 /* Map search */
 .map-search-wrapper {
     position: relative;
@@ -1585,6 +1593,42 @@ a:hover {
 .tooltip-civ {
     color: #0ff;
     font-size: 11px;
+}
+
+/* Mini-map */
+.mini-map {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    width: 150px;
+    height: 150px;
+    background: #111;
+    border: 2px solid #444;
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+    cursor: pointer;
+}
+
+.mini-map.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.mini-map-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+}
+
+.mini-map-viewport {
+    position: absolute;
+    border: 2px solid #0f0;
+    background: rgba(0, 255, 0, 0.1);
+    pointer-events: none;
+    box-sizing: border-box;
 }
 
 /* Map Legend Dropdown */
