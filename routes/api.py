@@ -319,9 +319,9 @@ def artifact(artifact_id):
 
     artifact = db.execute("""
         SELECT a.*,
-               hf.name as creator_name,
+               hf.name as creator_name, hf.race as creator_race, hf.caste as creator_caste,
                s.name as site_name, s.type as site_type,
-               holder.name as holder_name
+               holder.name as holder_name, holder.race as holder_race, holder.caste as holder_caste
         FROM artifacts a
         LEFT JOIN historical_figures hf ON a.creator_hfid = hf.id
         LEFT JOIN sites s ON a.site_id = s.id
@@ -334,6 +334,18 @@ def artifact(artifact_id):
 
     art_dict = dict(artifact)
 
+    # Add race info for creator
+    if art_dict.get('creator_race'):
+        creator_race_info = get_race_info(art_dict['creator_race'], art_dict.get('creator_caste'))
+        art_dict['creator_race_label'] = creator_race_info['label']
+        art_dict['creator_race_img'] = creator_race_info['img']
+
+    # Add race info for holder
+    if art_dict.get('holder_race'):
+        holder_race_info = get_race_info(art_dict['holder_race'], art_dict.get('holder_caste'))
+        art_dict['holder_race_label'] = holder_race_info['label']
+        art_dict['holder_race_img'] = holder_race_info['img']
+
     # Get written content contained in this artifact (for books/scrolls)
     written_contents = db.execute("""
         SELECT wc.id, wc.title, wc.type
@@ -344,9 +356,104 @@ def artifact(artifact_id):
 
     written_list = [dict(wc) for wc in written_contents]
 
+    # Get events related to this artifact
+    events = db.execute("""
+        SELECT he.id, he.year, he.type, he.hfid, he.slayer_hfid, he.death_cause,
+               he.site_id, he.extra_data,
+               hf.name as hf_name, hf.race as hf_race,
+               slayer.name as slayer_name, slayer.race as slayer_race,
+               s.name as site_name, s.type as site_type
+        FROM historical_events he
+        LEFT JOIN historical_figures hf ON he.hfid = hf.id
+        LEFT JOIN historical_figures slayer ON he.slayer_hfid = slayer.id
+        LEFT JOIN sites s ON he.site_id = s.id
+        WHERE he.artifact_id = ?
+           OR he.extra_data LIKE ?
+        ORDER BY he.year ASC
+        LIMIT 50
+    """, [artifact_id, f'%"item": "{artifact_id}"%']).fetchall()
+
+    events_list = []
+    for ev in events:
+        ev_dict = dict(ev)
+        ev_dict['type_label'] = get_event_type_info(ev_dict.get('type'))['label']
+
+        # Add race info for hfid figure
+        if ev_dict.get('hf_race'):
+            race_info = get_race_info(ev_dict['hf_race'])
+            ev_dict['hf_race_img'] = race_info['img']
+
+        # Add race info for slayer
+        if ev_dict.get('slayer_race'):
+            race_info = get_race_info(ev_dict['slayer_race'])
+            ev_dict['slayer_race_img'] = race_info['img']
+
+        # Parse extra_data for additional info
+        if ev_dict.get('extra_data'):
+            try:
+                extra = json.loads(ev_dict['extra_data'])
+                ev_dict['extra'] = extra
+
+                # Get victim info for death events
+                victim_hf = extra.get('victim_hf')
+                if victim_hf:
+                    victim = db.execute("""
+                        SELECT id, name, race, caste FROM historical_figures WHERE id = ?
+                    """, [victim_hf]).fetchone()
+                    if victim:
+                        ev_dict['victim_hfid'] = victim['id']
+                        ev_dict['victim_name'] = victim['name']
+                        ev_dict['victim_race'] = victim['race']
+                        victim_race_info = get_race_info(victim['race'], victim['caste'])
+                        ev_dict['victim_race_img'] = victim_race_info['img']
+
+                # Get histfig info for item_stolen and similar events
+                histfig_id = extra.get('histfig')
+                if histfig_id and not ev_dict.get('hf_name'):
+                    histfig = db.execute("""
+                        SELECT id, name, race, caste FROM historical_figures WHERE id = ?
+                    """, [histfig_id]).fetchone()
+                    if histfig:
+                        ev_dict['hfid'] = histfig['id']
+                        ev_dict['hf_name'] = histfig['name']
+                        ev_dict['hf_race'] = histfig['race']
+                        hf_race_info = get_race_info(histfig['race'], histfig['caste'])
+                        ev_dict['hf_race_img'] = hf_race_info['img']
+
+                # Get entity info if present
+                entity_id = extra.get('entity')
+                if entity_id and str(entity_id) != '-1':
+                    entity = db.execute("""
+                        SELECT id, name, type, race FROM entities WHERE id = ?
+                    """, [entity_id]).fetchone()
+                    if entity:
+                        ev_dict['entity_id'] = entity['id']
+                        ev_dict['entity_name'] = entity['name']
+                        ev_dict['entity_type'] = entity['type']
+
+                # Get defeated figure info for item_stolen (looted from)
+                circumstance = extra.get('circumstance', {})
+                if isinstance(circumstance, dict):
+                    defeated_id = circumstance.get('defeated')
+                    if defeated_id:
+                        defeated = db.execute("""
+                            SELECT id, name, race, caste FROM historical_figures WHERE id = ?
+                        """, [defeated_id]).fetchone()
+                        if defeated:
+                            ev_dict['defeated_hfid'] = defeated['id']
+                            ev_dict['defeated_name'] = defeated['name']
+                            ev_dict['defeated_race'] = defeated['race']
+                            defeated_race_info = get_race_info(defeated['race'], defeated['caste'])
+                            ev_dict['defeated_race_img'] = defeated_race_info['img']
+            except:
+                pass
+
+        events_list.append(ev_dict)
+
     return jsonify({
         'artifact': art_dict,
-        'written_contents': written_list
+        'written_contents': written_list,
+        'events': events_list
     })
 
 

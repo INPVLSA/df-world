@@ -796,16 +796,24 @@
                 html += '<div class="entity-row"><span class="entity-label">Material:</span> ' + (art.mat ? art.mat.replace(/_/g, ' ') : '-') + '</div>';
 
                 if (art.creator_name) {
+                    var creatorSprite = '';
+                    if (art.creator_race_img) {
+                        creatorSprite = '<img src="' + art.creator_race_img + '" class="inline-icon" alt="" onerror="this.style.display=\'none\'">';
+                    }
                     html += '<div class="entity-row"><span class="entity-label">Creator:</span> ';
-                    html += '<a href="#" class="entity-link" data-type="figure" data-id="' + art.creator_hfid + '">' + titleCase(art.creator_name) + '</a></div>';
+                    html += creatorSprite + '<a href="#" class="entity-link" data-type="figure" data-id="' + art.creator_hfid + '">' + titleCase(art.creator_name) + '</a></div>';
                 }
                 if (art.site_name) {
                     html += '<div class="entity-row"><span class="entity-label">Created at:</span> ';
                     html += renderSiteLink(art.site_id, art.site_name, art.site_type) + '</div>';
                 }
                 if (art.holder_name) {
+                    var holderSprite = '';
+                    if (art.holder_race_img) {
+                        holderSprite = '<img src="' + art.holder_race_img + '" class="inline-icon" alt="" onerror="this.style.display=\'none\'">';
+                    }
                     html += '<div class="entity-row"><span class="entity-label">Held by:</span> ';
-                    html += '<a href="#" class="entity-link" data-type="figure" data-id="' + art.holder_hfid + '">' + titleCase(art.holder_name) + '</a></div>';
+                    html += holderSprite + '<a href="#" class="entity-link" data-type="figure" data-id="' + art.holder_hfid + '">' + titleCase(art.holder_name) + '</a></div>';
                 }
 
                 // Written contents (for books/scrolls)
@@ -819,6 +827,122 @@
                     if (data.written_contents.length > 5) {
                         html += '<div class="expand-more-btn" data-count="' + (data.written_contents.length - 5) + '">... and ' + (data.written_contents.length - 5) + ' more</div>';
                     }
+                    html += '</div></div>';
+                }
+
+                // Artifact history/events
+                if (data.events && data.events.length > 0) {
+                    html += '<div class="entity-section"><div class="entity-section-title">History (' + data.events.length + ')</div>';
+                    html += '<div class="timeline">';
+                    var lastYear = null;
+                    data.events.forEach(function(ev) {
+                        var yearChanged = ev.year !== lastYear;
+                        if (yearChanged) {
+                            html += '<div class="timeline-year">' + (ev.year || '?') + '</div>';
+                            lastYear = ev.year;
+                        }
+                        html += '<div class="timeline-event">';
+
+                        // Build event description
+                        var desc = '';
+                        var evType = (ev.type || '').replace(/_/g, ' ');
+
+                        // Death events with slayer/victim
+                        if (ev.type === 'hist_figure_died' && (ev.slayer_name || ev.victim_name)) {
+                            var killedIcon = '<img src="/static/icons/events/killed.png" class="event-icon" alt="" onerror="this.style.display=\'none\'">';
+
+                            // Slayer
+                            if (ev.slayer_name) {
+                                var slayerSprite = ev.slayer_race_img ? '<img src="' + ev.slayer_race_img + '" class="event-icon" alt="" onerror="this.style.display=\'none\'">' : '';
+                                desc += slayerSprite + '<a href="#" class="entity-link" data-type="figure" data-id="' + ev.slayer_hfid + '">' + titleCase(ev.slayer_name) + '</a>';
+                            } else {
+                                desc += 'Someone';
+                            }
+
+                            desc += ' ' + killedIcon + ' killed ';
+
+                            // Victim
+                            if (ev.victim_name) {
+                                var victimSprite = ev.victim_race_img ? '<img src="' + ev.victim_race_img + '" class="event-icon" alt="" onerror="this.style.display=\'none\'">' : '';
+                                desc += victimSprite + '<a href="#" class="entity-link" data-type="figure" data-id="' + ev.victim_hfid + '">' + titleCase(ev.victim_name) + '</a>';
+                            } else {
+                                desc += 'someone';
+                            }
+
+                            // Death cause
+                            if (ev.death_cause) {
+                                desc += ' (' + ev.death_cause.replace(/_/g, ' ') + ')';
+                            }
+                        }
+                        // Item stolen events
+                        else if (ev.type === 'item_stolen') {
+                            // Thief
+                            if (ev.hf_name) {
+                                var thiefSprite = ev.hf_race_img ? '<img src="' + ev.hf_race_img + '" class="event-icon" alt="" onerror="this.style.display=\'none\'">' : '';
+                                desc += thiefSprite + '<a href="#" class="entity-link" data-type="figure" data-id="' + ev.hfid + '">' + titleCase(ev.hf_name) + '</a> ';
+                            }
+
+                            // Theft method determines verb
+                            var method = ev.extra && ev.extra.theft_method;
+                            if (method === 'looted') {
+                                desc += 'looted this artifact';
+                            } else if (method === 'recovered') {
+                                desc += 'recovered this artifact';
+                            } else {
+                                desc += 'stole this artifact';
+                            }
+
+                            // From defeated figure (for looted)
+                            if (ev.defeated_name) {
+                                var defeatedSprite = ev.defeated_race_img ? '<img src="' + ev.defeated_race_img + '" class="event-icon" alt="" onerror="this.style.display=\'none\'">' : '';
+                                desc += ' from ' + defeatedSprite + '<a href="#" class="entity-link" data-type="figure" data-id="' + ev.defeated_hfid + '">' + titleCase(ev.defeated_name) + '</a>';
+                            }
+                            // From entity
+                            else if (ev.entity_name) {
+                                desc += ' from <a href="#" class="entity-link" data-type="entity" data-id="' + ev.entity_id + '">' + titleCase(ev.entity_name) + '</a>';
+                            }
+                        } else {
+                            // Figure involved (for non-death events)
+                            if (ev.hf_name) {
+                                var figSprite = ev.hf_race_img ? '<img src="' + ev.hf_race_img + '" class="event-icon" alt="" onerror="this.style.display=\'none\'">' : '';
+                                desc += figSprite + '<a href="#" class="entity-link" data-type="figure" data-id="' + ev.hfid + '">' + titleCase(ev.hf_name) + '</a> ';
+                            }
+
+                            // Event type label
+                            var typeLabel = ev.type_label || evType;
+                            if (ev.type === 'artifact_created') {
+                                desc += 'created this artifact';
+                            } else if (ev.type === 'artifact_stored') {
+                                desc += 'stored this artifact';
+                            } else if (ev.type === 'artifact_lost') {
+                                desc += 'lost this artifact';
+                            } else if (ev.type === 'artifact_found') {
+                                desc += 'found this artifact';
+                            } else if (ev.type === 'artifact_given') {
+                                desc += 'received this artifact';
+                            } else if (ev.type === 'artifact_claimed') {
+                                desc += 'claimed this artifact';
+                            } else if (ev.type === 'artifact_destroyed') {
+                                desc += 'destroyed this artifact';
+                            } else if (ev.type === 'artifact_transformed') {
+                                desc += 'transformed this artifact';
+                            } else if (ev.type === 'artifact_copied') {
+                                desc += 'copied this artifact';
+                            } else if (ev.type === 'artifact_recovered') {
+                                desc += 'recovered this artifact';
+                            } else {
+                                desc += typeLabel;
+                            }
+                        }
+
+                        // Site reference
+                        if (ev.site_name) {
+                            desc += ' at ' + renderSiteLink(ev.site_id, ev.site_name, ev.site_type);
+                        }
+
+                        html += '<span class="timeline-desc">' + desc + '</span>';
+                        html += '</div>';
+                    });
                     html += '</div></div>';
                 }
 
