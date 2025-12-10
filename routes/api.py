@@ -723,3 +723,438 @@ def family_tree(figure_id):
         'grandchildren': grandchildren,
         'siblings': siblings
     })
+
+
+@api_bp.route('/region/<int:region_id>')
+def region(region_id):
+    """Get region details for modal."""
+    db = get_db()
+    if not db:
+        return jsonify({'error': 'Database not found'}), 404
+
+    region = db.execute("""
+        SELECT * FROM regions WHERE id = ?
+    """, [region_id]).fetchone()
+
+    if not region:
+        return jsonify({'error': 'Region not found'}), 404
+
+    region_dict = dict(region)
+
+    # Get sites in this region (by checking if site coords fall within region coords)
+    # For now, we'll return sites that might be related based on coordinate overlap
+    sites = []
+    if region_dict.get('coords'):
+        # Parse region coords to find bounding box
+        coords_list = region_dict['coords'].split('|')
+        region_coords = set()
+        for coord in coords_list:
+            if ',' in coord:
+                region_coords.add(coord)
+
+        # Find sites within these coordinates
+        sites_data = db.execute("""
+            SELECT id, name, type, coords FROM sites
+            WHERE coords IS NOT NULL
+        """).fetchall()
+
+        for site in sites_data:
+            if site['coords'] in region_coords:
+                site_dict = dict(site)
+                type_info = get_site_type_info(site_dict.get('type'))
+                site_dict['type_label'] = type_info['label']
+                sites.append(site_dict)
+
+    # Get events in this region
+    events = db.execute("""
+        SELECT he.id, he.year, he.type, he.hfid,
+               hf.name as hf_name
+        FROM historical_events he
+        LEFT JOIN historical_figures hf ON he.hfid = hf.id
+        WHERE he.extra_data LIKE ?
+        ORDER BY he.year DESC
+        LIMIT 20
+    """, [f'%"subregion_id": {region_id}%']).fetchall()
+
+    events_list = []
+    for ev in events:
+        ev_dict = dict(ev)
+        ev_dict['type_label'] = get_event_type_info(ev_dict.get('type'))['label']
+        events_list.append(ev_dict)
+
+    return jsonify({
+        'region': region_dict,
+        'sites': sites,
+        'events': events_list
+    })
+
+
+@api_bp.route('/underground-region/<int:region_id>')
+def underground_region(region_id):
+    """Get underground region details for modal."""
+    db = get_db()
+    if not db:
+        return jsonify({'error': 'Database not found'}), 404
+
+    region = db.execute("""
+        SELECT * FROM underground_regions WHERE id = ?
+    """, [region_id]).fetchone()
+
+    if not region:
+        return jsonify({'error': 'Underground region not found'}), 404
+
+    region_dict = dict(region)
+
+    # Map depth to layer name
+    depth_names = {
+        1: 'Cavern Layer 1',
+        2: 'Cavern Layer 2',
+        3: 'Cavern Layer 3',
+        4: 'Magma Sea',
+        5: 'Underworld'
+    }
+    region_dict['depth_name'] = depth_names.get(region_dict.get('depth'), f"Depth {region_dict.get('depth')}")
+
+    # Get events in this underground region
+    events = db.execute("""
+        SELECT he.id, he.year, he.type, he.hfid,
+               hf.name as hf_name
+        FROM historical_events he
+        LEFT JOIN historical_figures hf ON he.hfid = hf.id
+        WHERE he.extra_data LIKE ?
+        ORDER BY he.year DESC
+        LIMIT 20
+    """, [f'%"subregion_id": {region_id}%']).fetchall()
+
+    events_list = []
+    for ev in events:
+        ev_dict = dict(ev)
+        ev_dict['type_label'] = get_event_type_info(ev_dict.get('type'))['label']
+        events_list.append(ev_dict)
+
+    return jsonify({
+        'underground_region': region_dict,
+        'events': events_list
+    })
+
+
+@api_bp.route('/landmass/<int:landmass_id>')
+def landmass(landmass_id):
+    """Get landmass details for modal."""
+    db = get_db()
+    if not db:
+        return jsonify({'error': 'Database not found'}), 404
+
+    landmass = db.execute("""
+        SELECT * FROM landmasses WHERE id = ?
+    """, [landmass_id]).fetchone()
+
+    if not landmass:
+        return jsonify({'error': 'Landmass not found'}), 404
+
+    landmass_dict = dict(landmass)
+
+    # Calculate approximate size if coords available
+    if landmass_dict.get('coord_1') and landmass_dict.get('coord_2'):
+        try:
+            x1, y1 = map(int, landmass_dict['coord_1'].split(','))
+            x2, y2 = map(int, landmass_dict['coord_2'].split(','))
+            landmass_dict['width'] = abs(x2 - x1) + 1
+            landmass_dict['height'] = abs(y2 - y1) + 1
+            landmass_dict['area'] = landmass_dict['width'] * landmass_dict['height']
+        except (ValueError, AttributeError):
+            pass
+
+    # Get regions on this landmass (approximate by coordinate overlap)
+    regions = []
+    if landmass_dict.get('coord_1') and landmass_dict.get('coord_2'):
+        try:
+            x1, y1 = map(int, landmass_dict['coord_1'].split(','))
+            x2, y2 = map(int, landmass_dict['coord_2'].split(','))
+            min_x, max_x = min(x1, x2), max(x1, x2)
+            min_y, max_y = min(y1, y2), max(y1, y2)
+
+            regions_data = db.execute("""
+                SELECT id, name, type, evilness FROM regions
+                WHERE coords IS NOT NULL
+            """).fetchall()
+
+            for reg in regions_data:
+                reg_dict = dict(reg)
+                # Check if any region coord falls within landmass bounds
+                if reg_dict.get('coords'):
+                    for coord in reg_dict['coords'].split('|')[:1]:  # Check first coord
+                        if ',' in coord:
+                            rx, ry = map(int, coord.split(','))
+                            if min_x <= rx <= max_x and min_y <= ry <= max_y:
+                                regions.append({
+                                    'id': reg_dict['id'],
+                                    'name': reg_dict['name'],
+                                    'type': reg_dict['type'],
+                                    'evilness': reg_dict['evilness']
+                                })
+                                break
+        except (ValueError, AttributeError):
+            pass
+
+    # Get sites on this landmass
+    sites = []
+    if landmass_dict.get('coord_1') and landmass_dict.get('coord_2'):
+        try:
+            x1, y1 = map(int, landmass_dict['coord_1'].split(','))
+            x2, y2 = map(int, landmass_dict['coord_2'].split(','))
+            min_x, max_x = min(x1, x2), max(x1, x2)
+            min_y, max_y = min(y1, y2), max(y1, y2)
+
+            sites_data = db.execute("""
+                SELECT id, name, type, coords FROM sites
+                WHERE coords IS NOT NULL
+            """).fetchall()
+
+            for site in sites_data:
+                if site['coords'] and ',' in site['coords']:
+                    sx, sy = map(int, site['coords'].split(','))
+                    if min_x <= sx <= max_x and min_y <= sy <= max_y:
+                        site_dict = dict(site)
+                        type_info = get_site_type_info(site_dict.get('type'))
+                        site_dict['type_label'] = type_info['label']
+                        sites.append(site_dict)
+        except (ValueError, AttributeError):
+            pass
+
+    return jsonify({
+        'landmass': landmass_dict,
+        'regions': regions[:20],  # Limit to 20
+        'sites': sites[:50]  # Limit to 50
+    })
+
+
+@api_bp.route('/peak/<int:peak_id>')
+def peak(peak_id):
+    """Get mountain peak details for modal."""
+    db = get_db()
+    if not db:
+        return jsonify({'error': 'Database not found'}), 404
+
+    peak = db.execute("""
+        SELECT * FROM mountain_peaks WHERE id = ?
+    """, [peak_id]).fetchone()
+
+    if not peak:
+        return jsonify({'error': 'Peak not found'}), 404
+
+    peak_dict = dict(peak)
+
+    # Parse coordinates
+    if peak_dict.get('coords'):
+        try:
+            x, y = map(int, peak_dict['coords'].split(','))
+            peak_dict['x'] = x
+            peak_dict['y'] = y
+        except (ValueError, AttributeError):
+            pass
+
+    # Get nearby sites (within a radius of ~5 tiles)
+    nearby_sites = []
+    if peak_dict.get('x') is not None and peak_dict.get('y') is not None:
+        px, py = peak_dict['x'], peak_dict['y']
+        sites_data = db.execute("""
+            SELECT id, name, type, coords FROM sites
+            WHERE coords IS NOT NULL
+        """).fetchall()
+
+        for site in sites_data:
+            if site['coords'] and ',' in site['coords']:
+                try:
+                    sx, sy = map(int, site['coords'].split(','))
+                    distance = abs(sx - px) + abs(sy - py)  # Manhattan distance
+                    if distance <= 10:
+                        site_dict = dict(site)
+                        site_dict['distance'] = distance
+                        type_info = get_site_type_info(site_dict.get('type'))
+                        site_dict['type_label'] = type_info['label']
+                        nearby_sites.append(site_dict)
+                except (ValueError, AttributeError):
+                    continue
+
+        # Sort by distance
+        nearby_sites.sort(key=lambda s: s['distance'])
+
+    # Get events at this peak (if any)
+    events = db.execute("""
+        SELECT he.id, he.year, he.type, he.hfid,
+               hf.name as hf_name
+        FROM historical_events he
+        LEFT JOIN historical_figures hf ON he.hfid = hf.id
+        WHERE he.extra_data LIKE ?
+        ORDER BY he.year DESC
+        LIMIT 20
+    """, [f'%"mountain_peak_id": {peak_id}%']).fetchall()
+
+    events_list = []
+    for ev in events:
+        ev_dict = dict(ev)
+        ev_dict['type_label'] = get_event_type_info(ev_dict.get('type'))['label']
+        events_list.append(ev_dict)
+
+    return jsonify({
+        'peak': peak_dict,
+        'nearby_sites': nearby_sites[:10],
+        'events': events_list
+    })
+
+
+@api_bp.route('/event/<int:event_id>')
+def event(event_id):
+    """Get historical event details for modal."""
+    db = get_db()
+    if not db:
+        return jsonify({'error': 'Database not found'}), 404
+
+    event = db.execute("""
+        SELECT he.*,
+               hf.name as hf_name, hf.race as hf_race,
+               s.name as site_name, s.type as site_type,
+               slayer.name as slayer_name, slayer.race as slayer_race,
+               civ.name as civ_name,
+               ent.name as entity_name
+        FROM historical_events he
+        LEFT JOIN historical_figures hf ON he.hfid = hf.id
+        LEFT JOIN sites s ON he.site_id = s.id
+        LEFT JOIN historical_figures slayer ON he.slayer_hfid = slayer.id
+        LEFT JOIN entities civ ON he.civ_id = civ.id
+        LEFT JOIN entities ent ON he.entity_id = ent.id
+        WHERE he.id = ?
+    """, [event_id]).fetchone()
+
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+
+    event_dict = dict(event)
+
+    # Add type info
+    type_info = get_event_type_info(event_dict.get('type'))
+    event_dict['type_label'] = type_info['label']
+    event_dict['type_icon'] = type_info['icon']
+
+    # Add site type info
+    if event_dict.get('site_type'):
+        site_type_info = get_site_type_info(event_dict['site_type'])
+        event_dict['site_type_label'] = site_type_info['label']
+
+    # Add race info for historical figure
+    if event_dict.get('hf_race'):
+        race_info = get_race_info(event_dict['hf_race'])
+        event_dict['hf_race_label'] = race_info['label']
+        event_dict['hf_race_img'] = race_info['img']
+
+    # Add race info for slayer
+    if event_dict.get('slayer_race'):
+        race_info = get_race_info(event_dict['slayer_race'])
+        event_dict['slayer_race_label'] = race_info['label']
+        event_dict['slayer_race_img'] = race_info['img']
+
+    # Parse extra_data JSON
+    extra = {}
+    if event_dict.get('extra_data'):
+        try:
+            extra = json.loads(event_dict['extra_data'])
+            event_dict['extra'] = extra
+        except:
+            pass
+
+    # Resolve additional references from extra_data
+    resolved = {}
+
+    # Resolve hfid2 if present
+    hfid2 = extra.get('hfid2') or extra.get('hf_target')
+    if hfid2:
+        hf2 = db.execute("SELECT id, name, race FROM historical_figures WHERE id = ?", [hfid2]).fetchone()
+        if hf2:
+            resolved['hfid2'] = {
+                'id': hf2['id'],
+                'name': hf2['name'],
+                'race': hf2['race']
+            }
+            if hf2['race']:
+                race_info = get_race_info(hf2['race'])
+                resolved['hfid2']['race_label'] = race_info['label']
+
+    # Resolve artifact if present
+    artifact_id = event_dict.get('artifact_id') or extra.get('artifact_id')
+    if artifact_id:
+        artifact = db.execute("SELECT id, name, item_type FROM artifacts WHERE id = ?", [artifact_id]).fetchone()
+        if artifact:
+            resolved['artifact'] = dict(artifact)
+
+    # Resolve structure if present
+    structure_id = event_dict.get('structure_id') or extra.get('structure_id')
+    if structure_id and event_dict.get('site_id'):
+        structure = db.execute("""
+            SELECT * FROM structures WHERE site_id = ? AND local_id = ?
+        """, [event_dict['site_id'], structure_id]).fetchone()
+        if structure:
+            resolved['structure'] = dict(structure)
+
+    event_dict['resolved'] = resolved
+
+    return jsonify({
+        'event': event_dict
+    })
+
+
+@api_bp.route('/creature/<creature_id>')
+def creature(creature_id):
+    """Get creature details for modal."""
+    db = get_db()
+    if not db:
+        return jsonify({'error': 'Database not found'}), 404
+
+    creature = db.execute("""
+        SELECT * FROM creatures WHERE creature_id = ?
+    """, [creature_id]).fetchone()
+
+    if not creature:
+        return jsonify({'error': 'Creature not found'}), 404
+
+    creature_dict = dict(creature)
+
+    # Get race info (icon, etc.)
+    race_info = get_race_info(creature_dict['creature_id'])
+    creature_dict['icon'] = race_info['icon']
+    creature_dict['img'] = race_info['img']
+    creature_dict['label'] = race_info['label']
+
+    # Get historical figures of this race
+    figures = db.execute("""
+        SELECT id, name, caste, birth_year, death_year
+        FROM historical_figures
+        WHERE race = ?
+        ORDER BY birth_year
+        LIMIT 50
+    """, [creature_id]).fetchall()
+
+    figures_list = []
+    for fig in figures:
+        fig_dict = dict(fig)
+        fig_dict['alive'] = fig_dict['death_year'] == -1
+        figures_list.append(fig_dict)
+
+    # Count total figures of this race
+    total_count = db.execute("""
+        SELECT COUNT(*) as count FROM historical_figures WHERE race = ?
+    """, [creature_id]).fetchone()
+
+    creature_dict['total_figures'] = total_count['count'] if total_count else 0
+
+    # Count alive figures
+    alive_count = db.execute("""
+        SELECT COUNT(*) as count FROM historical_figures WHERE race = ? AND death_year = -1
+    """, [creature_id]).fetchone()
+
+    creature_dict['alive_figures'] = alive_count['count'] if alive_count else 0
+
+    return jsonify({
+        'creature': creature_dict,
+        'figures': figures_list
+    })
